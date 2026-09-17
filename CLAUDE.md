@@ -36,9 +36,9 @@ Entry point `bin/pyramid.ts` dispatches on `argv[2]`:
    go in the **cards first, then the code**, never the reverse. Query it with the
    `constellation` MCP (`get_card`/`search`/`traverse`) or just read the `.md` files.
 2. **The Pyramid HTTP contract is fixed and external** — owned by the sibling repo
-   `../pyramid-server` (card `EXTERNAL-PYRAMID-API`). This package **adapts** to it; it
-   never drives changes to it. Don't guess a response shape — confirm it against
-   `pyramid-server`, and keep parsing **defensive/tolerant**.
+   `../pyramid` (the Go API in its `server/` directory; card `EXTERNAL-PYRAMID-API`).
+   This package **adapts** to it; it never drives changes to it. Don't guess a response
+   shape — confirm it against that repo, and keep parsing **defensive/tolerant**.
 3. **Source-file headers cite their Constellation card handles** (e.g. `FILE-SERVER`,
    `DOC-CLI-OUTPUT`, `DOC-NAME-RESOLUTION`) — follow the handle into `constellation/`
    for the detailed contract behind a module. There is no separate flattened spec: the
@@ -112,10 +112,14 @@ keychain reader, IO sink) so they never touch the real keychain or network. Run
 
 ## Connected repos (siblings)
 
-- `../pyramid-server` — the Go API (chi + pgx + sqlc). Owns the **fixed HTTP contract**
-  and the `pyk_` bearer-auth path. Read it to confirm exact endpoint/field shapes.
-- `../pyramid-web` — the Svelte SPA. Owns the **Settings → API Keys** screen where users
-  mint `pyk_` keys. Out of scope here.
+- `../pyramid` — the Pyramid product repo. Since 2026-09-17 it is one repo, one binary:
+  - `server/` — the Go API (chi + pgx + sqlc). Owns the **fixed HTTP contract** and the
+    `pyk_` bearer-auth path. Read it to confirm exact endpoint/field shapes.
+  - `web/` — the **Puzzle** SPA (not Svelte; the Svelte app of the same name is retired).
+    Owns the **Settings → API Keys** screen where users mint `pyk_` keys, and the
+    `/auth/cli` page `pyramid login` hands off to. Out of scope here.
+
+  Both halves share one Constellation plan at that repo's root — use `repo: "pyramid"`.
 
 ## Publishing
 
