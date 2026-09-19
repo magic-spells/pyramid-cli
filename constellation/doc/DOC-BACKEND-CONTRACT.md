@@ -25,13 +25,14 @@ notes:
 
 Ground truth read directly from the Go source (`../pyramid-server`, `app/internal/{router,handlers,service,model}`), not inferred from the plan. This supersedes earlier
 guesses where they differ. All routes are under `/v1`, bearer `pyk_…`, key pinned to one
-workspace (`X-Workspace-*` ignored for keys).
+organization (`X-Organization-*` ignored for keys).
 
 ## Endpoints the MCP uses
 
 | Op | Method · path | Notes |
 |---|---|---|
-| getMe | `GET /v1/me` | bare `User` |
+| getMe | `GET /v1/me` | bare `User`; no embedded organization |
+| listOrganizations | `GET /v1/organizations` | `{data:[Organization]}`, **no cursor**; effectively one entry (the key's pinned org) |
 | listProjects | `GET /v1/projects` | `{data:[Project], cursor}`; cursor = next project UUID or null |
 | getWorkflow | `GET /v1/projects/{projectId}/workflow` | **only** `{stages:[{…Stage, statuses:[Status]}]}` |
 | listLabels | `GET /v1/projects/{projectId}/labels` | separate — not in /workflow |
@@ -58,6 +59,18 @@ workspace (`X-Workspace-*` ignored for keys).
 
 `GET/PATCH /v1/tasks/{id}/stage-responsibilities` **no longer exists** — it was removed
 server-side together with the per-stage ownership model (see below).
+
+## Tenancy keys on the wire
+
+The tenant noun is **organization** everywhere (renamed 2026-09-18):
+`/v1/workspaces…` → `/v1/organizations…`; JSON keys `workspace_id` →
+`organization_id`, `workspace_members` → `organization_members`,
+`workspace_role` → `organization_role`; header `X-Workspace-Slug` →
+`X-Organization-Slug` (this client never sends it — the key is org-pinned
+server-side); error code `workspace_not_found` → `organization_not_found`.
+`is_personal`, `personal_owner_id` and the role values `owner`/`admin`/`member`
+are unchanged. In this package the only wire change is the path, because it
+reads no `workspace_*` JSON keys and sends no tenancy header.
 
 ## Write bodies (exact json fields)
 
@@ -90,7 +103,7 @@ Ownership changes are recorded on the task timeline as `owner_changed` / `report
 ## DTO hydration anchors
 
 - `Task`: `key` (e.g. `WEB-42`) is **computed** from project `task_prefix` + `number`, not stored. `status_id` only (no inline name → hydrate from /workflow). `owner_id`/`reporter_id` are bare uuids or null; names arrive only via `?expand=owner,reporter` → `TaskWithRelations{owner, reporter, labels}`.
-- **User stub** (the expanded `owner`/`reporter`): `{ id, display_name, first_name, last_name, avatar_url, job_title }` — every field but `id` nullable. `job_title` is the person's role in the workspace (`workspace_members.job_title`), and the same value rides each `/projects/{id}/members` row, so the MCP can label an owner even without `?expand`.
+- **User stub** (the expanded `owner`/`reporter`): `{ id, display_name, first_name, last_name, avatar_url, job_title }` — every field but `id` nullable. `job_title` is the person's role in the organization (`organization_members.job_title`), and the same value rides each `/projects/{id}/members` row, so the MCP can label an owner even without `?expand`.
 - `TaskTimelineEvent`: `{ id, task_id, event_type, actor_id, data, old_value, new_value, project_id, created_at, is_deleted }`. For `owner_changed`/`reporter_changed`, `old_value`/`new_value` are a **bare uuid or null** (not an object) and `data.task_id` carries the task.
 - `Comment`: body wire field is `content` (+ `content_html`); `mentions:[uuid]`; `stage_id`, `parent_id`, `thread_root_id`, `author_id`, `updated_at`.
 - Workflow: `Stage{id,name,key,category,position,…}` + nested `Status{id,name,key,category,stage_id,position,…}`. Labels/members/templates fetched separately.

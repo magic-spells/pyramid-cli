@@ -32,7 +32,7 @@ interface UserStub {
   first_name?: string | null;
   last_name?: string | null;
   avatar_url?: string | null;
-  job_title?: string | null;  // the person's role in the workspace, e.g. "Design Lead"
+  job_title?: string | null;  // the person's role in the org, e.g. "Design Lead"
 }
 ```
 
