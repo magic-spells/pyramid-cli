@@ -5,7 +5,7 @@ status: built
 connections:
   - DATATYPE-MCP-CONFIG
   - EXTERNAL-PYRAMID-API
-  - DOC-AUTH-WORKSPACE
+  - DOC-AUTH-ORGANIZATION
   - DOC-PACKAGE-RENAME
   - DOC-CLI
   - DOC-CREDENTIAL-STORAGE
@@ -14,7 +14,7 @@ connections:
 
 # Onboarding
 
-1. Preferred local setup: run browser login. It opens Pyramid, asks for consent, mints a workspace-scoped API key, and stores it in the local keychain ([[FLOW-CLI-BROWSER-LOGIN]], [[DOC-CREDENTIAL-STORAGE]]):
+1. Preferred local setup: run browser login. It opens Pyramid, asks for consent, mints an org-scoped API key, and stores it in the local keychain ([[FLOW-CLI-BROWSER-LOGIN]], [[DOC-CREDENTIAL-STORAGE]]):
 
 ```sh
 npx -y @magic-spells/pyramid login
@@ -49,6 +49,6 @@ npx -y @magic-spells/pyramid set-key pyk_...
 ```
 
 4. Restart the AI tool.
-5. Run the `pyramid:doctor` prompt or `npx -y @magic-spells/pyramid doctor` — it confirms the authenticated user, workspace, and accessible projects.
+5. Run the `pyramid:doctor` prompt or `npx -y @magic-spells/pyramid doctor` — it confirms the authenticated user, org, and accessible projects.
 
 For CI, headless runs, or clients where keychain access is inconvenient, set `PYRAMID_API_KEY` in the MCP `env` block instead. Env always wins over the keychain. Local key management commands are `pyramid login`, `pyramid set-key`, `pyramid show-key` (masked), and `pyramid logout` (clear stored key).
