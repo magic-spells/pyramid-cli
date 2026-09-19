@@ -1,7 +1,7 @@
 // FILE-RESOURCES — MCP resource skin.
 //
 // Two read-only resources, kept minimal:
-//   - pyramid://me        -> the WhoAmI payload (authenticated user + workspace +
+//   - pyramid://me        -> the WhoAmI payload (authenticated user + org +
 //                            projects), via the `whoami` operation.
 //   - pyramid://projects  -> the accessible project list, via the `list_projects`
 //                            operation.
@@ -49,7 +49,7 @@ export function registerResources(server: McpServer, ctx: OpContext): void {
 		'pyramid://me',
 		{
 			title: 'Pyramid identity',
-			description: 'The authenticated user, their workspace, and accessible projects (whoami).',
+			description: 'The authenticated user, their org, and accessible projects (whoami).',
 			mimeType: 'application/json',
 		},
 		async (uri: URL) => {

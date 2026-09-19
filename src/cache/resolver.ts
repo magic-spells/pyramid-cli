@@ -65,7 +65,7 @@ export type ResolveKind = 'project' | 'workflow' | 'status' | 'stage' | 'user' |
 export class Resolver {
 	/** Per-project workflow cache (also the hydration join source). */
 	private readonly workflows = new Map<string, Cached<Workflow>>();
-	/** Workspace-wide project list cache (backs project-name resolution). */
+	/** Org-wide project list cache (backs project-name resolution). */
 	private projects?: Cached<ProjectSummary[]>;
 
 	constructor(private readonly client: ResolverClient) {}
@@ -263,7 +263,7 @@ export class Resolver {
 	/**
 	 * Drop cached data after a mutating op. One getWorkflow warms every per-project
 	 * kind, so any per-project kind invalidates the whole project workflow entry;
-	 * `project` also clears the workspace-wide project list. With no `kind`, clear
+	 * `project` also clears the org-wide project list. With no `kind`, clear
 	 * everything cached for the project.
 	 */
 	invalidate(projectId: string, kind?: ResolveKind): void {

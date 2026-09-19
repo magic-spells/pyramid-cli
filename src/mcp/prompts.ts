@@ -2,7 +2,7 @@
 //
 // One prompt, `doctor`: a self-check. It expands to an instruction telling the
 // model to call the `whoami` tool and report the authenticated user, their
-// workspace, and the accessible projects — confirming the key + connection are
+// org, and the accessible projects — confirming the key + connection are
 // wired correctly. No arguments; no Pyramid calls happen here (the model drives
 // the tool call when it runs the prompt).
 
@@ -11,14 +11,14 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { OpContext } from '../operations/index.js';
 
 const DOCTOR_DESCRIPTION =
-	'Check your Pyramid setup: confirm the API key authenticates and show the user, workspace, and accessible projects.';
+	'Check your Pyramid setup: confirm the API key authenticates and show the user, org, and accessible projects.';
 
 const DOCTOR_INSTRUCTION = [
 	'Run a Pyramid setup check.',
 	'',
 	'Call the `whoami` tool, then report back, in plain language:',
 	'  • the authenticated user (display name and email),',
-	'  • the workspace (name) you are connected to, and',
+	'  • the org (name) you are connected to, and',
 	'  • the accessible projects (names).',
 	'',
 	'Finish by confirming the setup looks good. If `whoami` returns an error,',
