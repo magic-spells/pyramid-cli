@@ -131,21 +131,41 @@ function hydrateReply(raw: any, workflow: Workflow): Omit<TaskComment, 'replies'
 // ============ Timeline ============
 
 /**
- * Raw timeline row -> TimelineEvent. ONLY the actor is joined to a name; the
- * values are passed through untouched because their shape depends on
- * `event_type` — for owner_changed/reporter_changed they are a BARE user uuid or
- * null, other kinds use other shapes, and new kinds ship without a client change
- * (DATATYPE-TIMELINE-EVENT).
+ * The event kinds whose `old_value`/`new_value` are a BARE user uuid (or null):
+ * the server sends them exactly like `status_changed` sends a status uuid. These
+ * are the only shapes we claim to know, so they are the only ones joined to a
+ * name (DATATYPE-TIMELINE-EVENT: "resolves names only where it knows the type").
+ */
+const PERSON_VALUED_EVENTS = new Set(['owner_changed', 'reporter_changed']);
+
+/**
+ * Raw timeline row -> TimelineEvent. The actor is always joined to a name. The
+ * values stay `unknown` and are passed through UNTOUCHED except for the handful
+ * of event types whose values we know are a bare user uuid — those become a
+ * `UserStub` so a reader sees "Ann Smith", not a UUID. An unknown event_type (and
+ * any unexpected value shape inside a known one) survives verbatim, so a new
+ * server event kind never breaks or crashes this.
  */
 export function hydrateTimelineEvent(raw: any, workflow: Workflow): TimelineEvent {
 	const e = obj(raw);
+	const eventType = str(e.event_type);
+	const value = (v: unknown): unknown => {
+		if (!PERSON_VALUED_EVENTS.has(eventType)) return v ?? null;
+		// A non-string (or empty) value is not the uuid we expected — pass it through
+		// rather than silently dropping it.
+		if (typeof v !== 'string' || v.length === 0) return v ?? null;
+		const stub = userStubFromAny(workflow, v);
+		// A user the cached workflow does not know resolves to an EMPTY display_name;
+		// keep the raw uuid then — a blank cell would lose the only fact we have.
+		return stub && stub.display_name.length > 0 ? stub : v;
+	};
 	return {
 		id: str(e.id),
 		task_id: str(e.task_id) || str(obj(e.data).task_id),
-		event_type: str(e.event_type),
+		event_type: eventType,
 		actor: userStubFromAny(workflow, e.actor ?? e.actor_id),
-		old_value: e.old_value ?? null,
-		new_value: e.new_value ?? null,
+		old_value: value(e.old_value),
+		new_value: value(e.new_value),
 		data: obj(e.data),
 		created_at: str(e.created_at),
 	};

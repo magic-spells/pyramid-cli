@@ -4,8 +4,19 @@ status: built
 connections:
   - DATATYPE-TASK-DETAIL
   - DOC-RENDERING
+notes:
+  - kind: state
+    text: >-
+      "Resolves names only where it knows the type" is now actually implemented:
+      hydrateTimelineEvent joins old_value/new_value to a UserStub for the two event kinds whose
+      values are a bare user uuid (owner_changed, reporter_changed) and passes every other kind
+      through verbatim. Two guards matter — a value that is not a non-empty string inside a known
+      kind is passed through untouched, and a uuid the cached workflow does not know keeps its raw
+      uuid rather than collapsing to the empty display_name that the member lookup returns for a
+      stranger (which the generic CLI table would render as a blank cell, losing the only fact in
+      the row). The values stay typed `unknown`: an unknown event_type still survives a client that
+      has never heard of it.
 ---
-
 
 One hydrated row of a task's history, returned by [[API-TOOL-GET-TASK-TIMELINE]]. The server
 row is all UUIDs ([[DOC-BACKEND-CONTRACT]]); the MCP joins the actor to a name like every other

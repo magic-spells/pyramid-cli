@@ -67,14 +67,26 @@ interface PyramidEnvelope {
 	error?: { code?: string; message?: string; details?: unknown };
 }
 
-/** Defensively read `{ error: { code, message } }` out of a parsed body. */
-function readEnvelope(body: unknown): { code?: string; message?: string } {
+/**
+ * Defensively read `{ error: { code, message, details } }` out of a parsed body.
+ * `field` is lifted out of `details` because it is the one detail the backend
+ * promises on a validation failure (`{"field":"owner_id"}`) and the one a caller
+ * cannot recover any other way: a PATCH carrying both owner_id and reporter_id
+ * gets one "user is not a member of this project" message for either half.
+ */
+function readEnvelope(body: unknown): { code?: string; message?: string; field?: string } {
 	if (body && typeof body === 'object' && 'error' in body) {
 		const err = (body as PyramidEnvelope).error;
 		if (err && typeof err === 'object') {
+			const details = err.details;
+			const rawField =
+				details && typeof details === 'object'
+					? (details as Record<string, unknown>).field
+					: undefined;
 			return {
 				code: typeof err.code === 'string' ? err.code : undefined,
 				message: typeof err.message === 'string' ? err.message : undefined,
+				field: typeof rawField === 'string' && rawField.length > 0 ? rawField : undefined,
 			};
 		}
 	}
@@ -130,7 +142,14 @@ export function mapHttpError(status: number, body: unknown): McpError {
 	}
 
 	if (status === 400 || status === 422) {
-		return new McpError('validation_failed', message);
+		// `details.field` names WHICH member the server rejected (e.g. owner_id when
+		// the named owner is not a project member) — surface it or the caller cannot
+		// tell which half of a two-field write failed.
+		return env.field === undefined
+			? new McpError('validation_failed', message)
+			: new McpError('validation_failed', message, {
+					hint: `The server rejected the \`${env.field}\` field.`,
+				});
 	}
 
 	if (status === 409) {

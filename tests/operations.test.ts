@@ -1643,14 +1643,15 @@ describe('operation: get_task_timeline (real registry)', () => {
 			event_type: 'owner_changed',
 		});
 
-		// the actor is joined to a name; the VALUES stay raw, because their shape is
-		// event_type-dependent (a bare uuid here, not an object).
+		// the actor is joined to a name, and so are the values of the event types whose
+		// shape we KNOW is a bare user uuid (owner_changed / reporter_changed) — a raw
+		// uuid in a history line is unreadable. null stays null.
 		expect(page.items[0]).toMatchObject({
 			id: 'ev-1',
 			event_type: 'owner_changed',
 			actor: { id: 'u-ann', display_name: 'Ann Smith' },
 			old_value: null,
-			new_value: 'u-bob',
+			new_value: { id: 'u-bob', display_name: 'Bob Jones' },
 		});
 
 		// pagination surfaced, never truncated (r8).
@@ -1680,6 +1681,45 @@ describe('operation: get_task_timeline (real registry)', () => {
 		const op = operationsByName.get('get_task_timeline')!;
 		expect(op.meta?.destructive).toBeFalsy();
 		expect(op.meta?.cli).toMatchObject({ group: 'task', verb: 'timeline' });
+	});
+
+	it('leaves an unknown event kind, and an unknown user, exactly as the server sent it', async () => {
+		const op = operationsByName.get('get_task_timeline')!;
+		const getTask = vi.fn(async () => taskRow);
+		const getTaskTimeline = vi.fn(async () => ({
+			data: [
+				// A kind this client has never heard of: the values are NOT ours to
+				// interpret, and it must not crash.
+				{
+					id: 'ev-3',
+					event_type: 'sprint_rolled_over',
+					old_value: { sprint: 7 },
+					new_value: [1, 2, 3],
+					data: { task_id: TASK_UUID },
+				},
+				// A known kind, but a user the cached workflow has never seen: the raw
+				// uuid survives rather than collapsing to a blank name.
+				{
+					id: 'ev-4',
+					event_type: 'reporter_changed',
+					old_value: 'u-stranger',
+					new_value: null,
+					data: { task_id: TASK_UUID },
+				},
+			],
+			cursor: null,
+		}));
+		const page = (await op.run(
+			{ task: TASK_UUID },
+			makeCtx({ getTask, getTaskTimeline }, makeResolver())
+		)) as { items: Record<string, unknown>[] };
+
+		expect(page.items[0]).toMatchObject({
+			event_type: 'sprint_rolled_over',
+			old_value: { sprint: 7 },
+			new_value: [1, 2, 3],
+		});
+		expect(page.items[1]).toMatchObject({ old_value: 'u-stranger', new_value: null });
 	});
 });
 
