@@ -20,9 +20,13 @@ valid precondition is rejected — so the MCP must participate, transparently.
   read `updated_at` from the comment body instead.
 - **Required on:** `PATCH /v1/tasks/{id}` (update), `DELETE /v1/tasks/{id}` (soft+hard),
   `PATCH /v1/comments/{id}`, `DELETE /v1/comments/{id}`. **Not** required on create, move,
-  archive/unarchive, bulk, or stage-responsibilities.
+  archive/unarchive, or bulk.
 - **Failure.** Absent **or** stale `If-Match` → HTTP **409** with envelope code `conflict`
   (the two cases differ only by `message`). There is no 412.
+
+Because owner/reporter now ride the task PATCH ([[DOC-BACKEND-CONTRACT]]), an ownership change
+is covered by the same precondition as any other field — there is no longer an unguarded
+`stage-responsibilities` write that could land while the content patch was rejected.
 
 **MCP flow (read-modify-write, hidden from the AI).** For update/delete the client does a
 **GET first** to capture the current `ETag` (or the body's `updated_at`), then sends it as

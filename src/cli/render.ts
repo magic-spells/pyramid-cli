@@ -154,6 +154,10 @@ function renderRows(rows: unknown[]): void {
  * Flatten one value to a single table cell. Common hydrated shapes ({id,name} /
  * {id,display_name}) collapse to their human label; arrays join with commas;
  * other objects fall back to compact JSON.
+ *
+ * A person (Owner / Reporter) renders as "Ann Smith (Design Lead)" when a
+ * job_title is known — the title is what tells a reader whether the right person
+ * holds the task, and a bare name makes them go look it up.
  */
 function cell(v: unknown): string {
 	if (v === null || v === undefined) return '';
@@ -163,7 +167,11 @@ function cell(v: unknown): string {
 	if (typeof v === 'object') {
 		const o = v as Record<string, unknown>;
 		if (typeof o.name === 'string') return o.name;
-		if (typeof o.display_name === 'string') return o.display_name;
+		if (typeof o.display_name === 'string') {
+			return typeof o.job_title === 'string' && o.job_title.length > 0
+				? `${o.display_name} (${o.job_title})`
+				: o.display_name;
+		}
 		if (typeof o.key === 'string') return o.key;
 		if (typeof o.id === 'string') return o.id;
 		return JSON.stringify(v);

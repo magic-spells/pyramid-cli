@@ -7,7 +7,7 @@
 // any hydrated field a model/user would read:
 //   - status_id            -> { id, name }            (status.name)
 //   - status.stage_id      -> stage { id, name }      (status carries its stage)
-//   - owner_id/reporter_id -> UserStub | null         (member.display_name)
+//   - owner_id/reporter_id -> UserStub | null         (member.display_name + job_title)
 //   - author_id/mentions[] -> UserStub                (member.display_name)
 //   - label ids            -> label names (string[])
 // `key` is provided by the server and passed through. Every field is read
@@ -19,6 +19,7 @@ import type {
 	TaskDetail,
 	TaskReference,
 	TaskSummary,
+	TimelineEvent,
 	UserStub,
 	Workflow,
 } from './types.js';
@@ -127,6 +128,29 @@ function hydrateReply(raw: any, workflow: Workflow): Omit<TaskComment, 'replies'
 	};
 }
 
+// ============ Timeline ============
+
+/**
+ * Raw timeline row -> TimelineEvent. ONLY the actor is joined to a name; the
+ * values are passed through untouched because their shape depends on
+ * `event_type` — for owner_changed/reporter_changed they are a BARE user uuid or
+ * null, other kinds use other shapes, and new kinds ship without a client change
+ * (DATATYPE-TIMELINE-EVENT).
+ */
+export function hydrateTimelineEvent(raw: any, workflow: Workflow): TimelineEvent {
+	const e = obj(raw);
+	return {
+		id: str(e.id),
+		task_id: str(e.task_id) || str(obj(e.data).task_id),
+		event_type: str(e.event_type),
+		actor: userStubFromAny(workflow, e.actor ?? e.actor_id),
+		old_value: e.old_value ?? null,
+		new_value: e.new_value ?? null,
+		data: obj(e.data),
+		created_at: str(e.created_at),
+	};
+}
+
 // ============ Reference (no UUIDs to join — pass through defensively) ============
 
 const REFERENCE_TYPES = [
@@ -204,10 +228,8 @@ function displayName(wf: Workflow, userId: string): string {
 function ownerStub(wf: Workflow, expanded: unknown, idValue: unknown): UserStub | null {
 	const stub = userStubFromAny(wf, expanded);
 	if (stub) return stub;
-	if (typeof idValue === 'string' && idValue.length > 0) {
-		return { id: idValue, display_name: displayName(wf, idValue) };
-	}
-	return null;
+	// Not expanded — a bare id still gets the name AND the workflow's job_title.
+	return userStubFromAny(wf, idValue);
 }
 
 /**
@@ -223,11 +245,23 @@ function authorStub(wf: Workflow, expanded: unknown, idValue: unknown): UserStub
 	);
 }
 
-/** A user value that may be an expanded stub or a bare id -> UserStub | null. */
+/** The workflow's member row for a user id, if the workflow knows them. */
+function memberOf(wf: Workflow, userId: string) {
+	return wf.members.find((m) => m.id === userId);
+}
+
+/**
+ * A user value that may be an expanded stub (`{id, display_name, first_name,
+ * last_name, avatar_url, job_title}`) or a bare id -> UserStub | null.
+ *
+ * The optional profile fields ride only the EXPANDED shape, so they are set only
+ * when present — except `job_title`, which the cached workflow's member rows also
+ * carry, letting a renderer label an Owner without paying for `?expand`.
+ */
 function userStubFromAny(wf: Workflow, value: unknown): UserStub | null {
 	if (typeof value === 'string') {
 		if (value.length === 0) return null;
-		return { id: value, display_name: displayName(wf, value) };
+		return withProfile(wf, { id: value, display_name: displayName(wf, value) }, {});
 	}
 	if (value && typeof value === 'object') {
 		const u = obj(value);
@@ -237,9 +271,28 @@ function userStubFromAny(wf: Workflow, value: unknown): UserStub | null {
 			typeof u.display_name === 'string' && u.display_name.length > 0
 				? u.display_name
 				: displayName(wf, id);
-		return { id, display_name: dn };
+		return withProfile(wf, { id, display_name: dn }, u);
 	}
 	return null;
+}
+
+/**
+ * Attach the optional profile fields to a stub. Each is copied only when the raw
+ * row actually carried it (an absent field stays absent rather than becoming an
+ * explicit null); `job_title` falls back to the workflow member row.
+ */
+function withProfile(wf: Workflow, stub: UserStub, raw: Record<string, unknown>): UserStub {
+	if (raw.first_name !== undefined) stub.first_name = nullableStr(raw.first_name);
+	if (raw.last_name !== undefined) stub.last_name = nullableStr(raw.last_name);
+	if (raw.avatar_url !== undefined) stub.avatar_url = nullableStr(raw.avatar_url);
+
+	const jobTitle =
+		typeof raw.job_title === 'string' && raw.job_title.length > 0
+			? raw.job_title
+			: memberOf(wf, stub.id)?.job_title;
+	if (jobTitle) stub.job_title = jobTitle;
+
+	return stub;
 }
 
 /** mentions[] (ids or stubs) -> UserStub[] (display names joined). */

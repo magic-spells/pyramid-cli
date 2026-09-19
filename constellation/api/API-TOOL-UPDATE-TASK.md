@@ -11,13 +11,17 @@ connections:
   - PLAN-PHASE-2-CORE-TOOLS
 ---
 
-`update_task` — sparse patch of a task's **content only**: title, description, priority,
-dates, estimate, guest_* ([[DATATYPE-UPDATE-TASK-INPUT]] → [[DATATYPE-TASK-DETAIL]]). Wraps
-`PATCH /v1/tasks/{id}`, which **requires an `If-Match` ETag** — the client does a read-first to
-get it ([[DOC-CONCURRENCY]]).
+`update_task` — sparse patch of a task's content **plus its owner and reporter**: title,
+description, priority, dates, estimate, guest_*, `owner`, `reporter`
+([[DATATYPE-UPDATE-TASK-INPUT]] → [[DATATYPE-TASK-DETAIL]]). Wraps `PATCH /v1/tasks/{id}`,
+which **requires an `If-Match` ETag** — the client does a read-first to get it
+([[DOC-CONCURRENCY]]).
 
-The PATCH body accepts **none** of owner/reporter, labels, or custom-field values
-([[DOC-BACKEND-CONTRACT]]); those have dedicated endpoints and so are separate tools (or
-ride a follow-up call): owner/reporter → `PATCH …/stage-responsibilities`, labels →
-`POST`/`DELETE …/labels`, fields → `PATCH …/field-values`. Status/stage and ordering go
-through [[API-TOOL-MOVE-TASK]], not here.
+Owner/reporter are top-level nullable fields on that PATCH ([[DOC-BACKEND-CONTRACT]]): names
+resolve to `owner_id`/`reporter_id`, an explicit `null` clears one, and a non-member comes back
+as a typed `validation_failed`. They used to be a separate `PATCH …/stage-responsibilities`
+call; that route is gone, so ownership now moves atomically with the rest of the patch.
+
+The PATCH body still accepts **neither** labels nor custom-field values — those keep their
+dedicated endpoints and ride along as a fan-out: labels → `POST`/`DELETE …/labels`, fields →
+`PATCH …/field-values`. Status/stage and ordering go through [[API-TOOL-MOVE-TASK]], not here.

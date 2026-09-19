@@ -412,20 +412,27 @@ function normalizeStatus(raw: unknown): WorkflowStatus {
 
 /**
  * Raw `ProjectMember` row -> WorkflowMember. The real `/members` row carries the
- * user's name/email under a nested `user` (DOC-BACKEND-CONTRACT); we read that
- * first and fall back to top-level fields for a flatter shape. The member id is
+ * user's name/email under a nested `user` (DOC-BACKEND-CONTRACT) and its own
+ * `job_title`; we read those first and fall back to top-level fields for a
+ * flatter shape. The member id is
  * the USER id (what owner_id/reporter_id/author_id reference), so prefer
  * `user.id` / `user_id` over the membership row's own id.
  */
 function normalizeMember(raw: unknown): WorkflowMember {
 	const m = rec(raw);
 	const u = rec(m.user);
-	return {
+	const member: WorkflowMember = {
 		id: str(u.id) || str(m.user_id) || str(m.id),
 		display_name: str(u.display_name) || str(m.display_name),
 		email: str(u.email) || str(m.email),
 		role: str(m.role) || str(u.role),
 	};
+	// job_title is the person's OWN title ("Design Lead"), not the permission role.
+	// It rides the membership row (and is mirrored onto the nested user), and is
+	// what lets hydrate label an Owner without a per-task `?expand`.
+	const jobTitle = optStr(m.job_title) ?? optStr(u.job_title);
+	if (jobTitle !== undefined) member.job_title = jobTitle;
+	return member;
 }
 
 /**

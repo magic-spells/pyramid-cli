@@ -173,7 +173,9 @@ describe('runLogin', () => {
 			},
 		});
 
-		expect(await runLogin(['login', '--web-url', 'http://localhost:5173', '--name', 'Local CLI'], f.io)).toBe(0);
+		expect(
+			await runLogin(['login', '--web-url', 'http://localhost:5173', '--name', 'Local CLI'], f.io)
+		).toBe(0);
 		expect(f.stored).toBe(KEY);
 		const login = new URL(seenURL);
 		expect(login.origin).toBe('http://localhost:5173');

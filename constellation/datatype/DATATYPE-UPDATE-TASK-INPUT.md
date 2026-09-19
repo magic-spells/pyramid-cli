@@ -19,19 +19,22 @@ interface UpdateTaskInput {
   start_date?: string | null;
   estimate?: number;
   guest_visible?: boolean; guest_title?: string; guest_description?: string;
+  owner?: string | null;    // member name/email; explicit null clears
+  reporter?: string | null; // same
   // Convenience fields the backend PATCH does NOT accept — the MCP fans each out (see below):
-  owner?: string | null;   // name; null clears
-  reporter?: string | null;
   add_labels?: string[];
   remove_labels?: string[];
   custom_fields?: { field: string; value: unknown }[];
 }
 ```
 
-**Wire mapping ([[DOC-BACKEND-CONTRACT]]).** Only the content fields go on `PATCH /v1/tasks/{id}`
-(which needs an `If-Match` read-first, [[DOC-CONCURRENCY]]). The convenience fields fan out to
-their dedicated endpoints in the same tool call: `owner`/`reporter` → `PATCH
-…/stage-responsibilities` (targeting the task's **current stage** unless the AI is in a move),
+**Wire mapping ([[DOC-BACKEND-CONTRACT]]).** `owner`/`reporter` resolve to `owner_id`/
+`reporter_id` and ride the **same** `PATCH /v1/tasks/{id}` as the content fields — one write,
+covered by the read-first `If-Match` ([[DOC-CONCURRENCY]]), so an ownership change can no longer
+half-succeed. Passing `null` clears the field; a name that resolves to a non-member → 422
+`validation_failed`.
+
+Labels and custom fields still fan out to their dedicated endpoints in the same tool call:
 `add_labels`/`remove_labels` → `POST`/`DELETE …/labels`, `custom_fields` →
 `PATCH …/field-values`. A partial failure reports which sub-update failed; the AI still passes
 names, never UUIDs or endpoints.

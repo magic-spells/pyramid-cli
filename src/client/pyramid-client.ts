@@ -24,7 +24,8 @@
 //   - GET /v1/me/tasks      -> { "data": Task[], "cursor": string|null } via the
 //                              shared cursorEnvelope (handlers/user.go GetMyTasks —
 //                              this handler is BUILT, not a stub). Accepts the
-//                              `role`, `limit`, `cursor` query params.
+//                              `limit`, `cursor` query params; `role` is accepted
+//                              and IGNORED server-side, so we never send it.
 
 import { request as undiciRequest } from 'undici';
 
@@ -108,19 +109,21 @@ export class PyramidClient {
 	}
 
 	/**
-	 * GET /v1/me/tasks — the caller's cross-project responsibility feed, newest
-	 * first, with an opaque keyset cursor. Returns the raw `{ data, cursor }`
-	 * envelope (cursor normalized to `string | null`). `role` filters to
-	 * owner/reporter/any; `limit` caps the page; `cursor` continues a prior page.
+	 * GET /v1/me/tasks — the tasks the caller OWNS or REPORTS, across projects,
+	 * newest first, with an opaque keyset cursor. Returns the raw `{ data, cursor }`
+	 * envelope (cursor normalized to `string | null`). `limit` caps the page;
+	 * `cursor` continues a prior page.
+	 *
+	 * There is deliberately NO `role` parameter: the server accepts `?role=` and
+	 * IGNORES it (DOC-BACKEND-CONTRACT), so sending it would promise a narrowing
+	 * that never happens.
 	 */
 	async listMyTasks(opts?: {
-		role?: 'owner' | 'reporter' | 'any';
 		limit?: number;
 		cursor?: string;
 	}): Promise<{ data: unknown[]; cursor: string | null }> {
 		const envelope = await this.request<CursorEnvelope>('GET', '/v1/me/tasks', {
 			query: {
-				role: opts?.role,
 				limit: opts?.limit,
 				cursor: opts?.cursor,
 			},
@@ -233,6 +236,30 @@ export class PyramidClient {
 	}
 
 	/**
+	 * GET /v1/tasks/{id}/timeline — one page of a task's history, **oldest first**
+	 * (the reverse of every other list here). Returns the raw `{ data, cursor }`
+	 * envelope. `limit` defaults to 50 server-side and is capped at 200;
+	 * `event_type` narrows to one kind (e.g. `owner_changed`). No If-Match.
+	 */
+	async getTaskTimeline(
+		taskId: string,
+		opts?: { limit?: number; cursor?: string; event_type?: string }
+	): Promise<{ data: unknown[]; cursor: string | null }> {
+		const envelope = await this.request<CursorEnvelope>(
+			'GET',
+			`/v1/tasks/${encodeURIComponent(taskId)}/timeline`,
+			{
+				query: {
+					limit: opts?.limit,
+					cursor: opts?.cursor,
+					event_type: opts?.event_type,
+				},
+			}
+		);
+		return normalizeCursorEnvelope(envelope);
+	}
+
+	/**
 	 * GET /v1/tasks/{id} — one task's full detail (raw `RawTaskDetail`). A non-empty
 	 * `expand` enables relations (editor/timeline/comments/estimates/followers/…);
 	 * omit it for the lean shape. `taskId` must already be a UUID.
@@ -290,9 +317,10 @@ export class PyramidClient {
 	}
 
 	/**
-	 * PATCH /v1/tasks/{id} — sparse update of a task's CONTENT (title/description/
-	 * priority/dates/estimate/client_*). `body` carries NO owner/reporter/labels/
-	 * field_values — those go through the dedicated endpoints. Requires If-Match
+	 * PATCH /v1/tasks/{id} — sparse update of a task's content (title/description/
+	 * priority/dates/estimate/guest_*) AND its `owner_id`/`reporter_id` (an explicit
+	 * null clears one). `body` still carries NO labels and NO field_values — those
+	 * keep their dedicated endpoints. Requires If-Match
 	 * (DOC-CONCURRENCY): GET first to capture the ETag, send it, retry ONCE on 409.
 	 * Returns the raw updated `RawTaskDetail`.
 	 */
@@ -315,20 +343,6 @@ export class PyramidClient {
 	 */
 	moveTask(taskId: string, body: unknown): Promise<unknown> {
 		return this.request<unknown>('PATCH', `/v1/tasks/${encodeURIComponent(taskId)}/move`, { body });
-	}
-
-	/**
-	 * PATCH /v1/tasks/{id}/stage-responsibilities — set per-stage owner/reporter
-	 * (the ONLY way to change ownership on an existing task). `body` is
-	 * `{ responsibilities: [{ stage_id, owner_id, reporter_id }] }` with resolved
-	 * UUIDs. No If-Match. Returns the raw response.
-	 */
-	setStageResponsibilities(taskId: string, body: unknown): Promise<unknown> {
-		return this.request<unknown>(
-			'PATCH',
-			`/v1/tasks/${encodeURIComponent(taskId)}/stage-responsibilities`,
-			{ body }
-		);
 	}
 
 	/**

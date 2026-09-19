@@ -22,8 +22,16 @@ interface Workflow {
   stages: { id: string; key: string; name: string; position: string }[];
   statuses: { id: string; key: string; name: string; stage_id: string; position: string }[];
   labels: { id: string; name: string; color: string }[];
-  members: { id: string; display_name: string; email: string; role: string }[];
+  members: WorkflowMember[];
   templates: { id: string; name: string; fields: CustomFieldDef[] }[];
+}
+
+interface WorkflowMember {
+  id: string;             // the USER id — what owner_id/reporter_id/author_id reference
+  display_name: string;
+  email: string;
+  role: string;           // project role: admin | pm | member | viewer | guest
+  job_title?: string;     // the person's own title, e.g. "Design Lead" — NOT the role
 }
 
 interface CustomFieldDef {
@@ -32,3 +40,8 @@ interface CustomFieldDef {
   options?: string[];
 }
 ```
+
+`role` and `job_title` are different things and both matter: `role` is permission (what they may
+do), `job_title` is the human label a renderer shows beside an Owner's name. The members
+endpoint carries `job_title`, which is why a task's owner can be labelled without paying for
+`?expand` on every row.

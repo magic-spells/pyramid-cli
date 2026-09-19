@@ -8,7 +8,8 @@
 //
 // Surface: discovery (whoami, list_projects, get_project_workflow, list_my_tasks)
 // plus the task write surface (create_task, create_tasks_bulk, update_task,
-// move_task, archive_task, delete_task, list_tasks, get_task) and comments
+// move_task, archive_task, delete_task, list_tasks, get_task, get_task_timeline)
+// and comments
 // (add_comment, reply_to_comment). Phase-3 collab (followers, labels, estimates,
 // custom-fields, notifications) remains out of scope.
 
@@ -17,7 +18,12 @@ import { z } from 'zod';
 import { McpError } from '../errors.js';
 import type { PyramidClient } from '../client/pyramid-client.js';
 import type { Resolver } from '../cache/resolver.js';
-import { hydrateComment, hydrateTaskDetail, hydrateTaskSummary } from '../hydrate.js';
+import {
+	hydrateComment,
+	hydrateTaskDetail,
+	hydrateTaskSummary,
+	hydrateTimelineEvent,
+} from '../hydrate.js';
 import type {
 	Page,
 	ProjectSummary,
@@ -25,6 +31,7 @@ import type {
 	TaskComment,
 	TaskDetail,
 	TaskSummary,
+	TimelineEvent,
 	WhoAmI,
 	Workflow,
 } from '../types.js';
@@ -182,8 +189,10 @@ const getProjectWorkflow: Operation<GetProjectWorkflowInput, Workflow> = {
 
 // ---------- list_my_tasks ----------
 
+// No `role`: GET /v1/me/tasks accepts `?role=` and IGNORES it server-side
+// (DOC-BACKEND-CONTRACT), so offering the knob would promise a narrowing that
+// never happens. Narrow with list_tasks({ owner }) / list_tasks({ reporter }).
 const listMyTasksInput = z.object({
-	role: z.enum(['owner', 'reporter', 'any']).optional(),
 	limit: z.number().int().min(1).max(50).optional(),
 	cursor: z.string().optional(),
 });
@@ -200,7 +209,6 @@ const listMyTasks: Operation<ListMyTasksInput, Page<TaskSummary>> = {
 	async run(input, ctx): Promise<Page<TaskSummary>> {
 		const limit = input.limit ?? DEFAULT_LIMIT;
 		const page = await ctx.client.listMyTasks({
-			role: input.role,
 			limit,
 			cursor: input.cursor,
 		});
@@ -381,11 +389,9 @@ async function resolveMentionIds(
 
 /**
  * Build a resolved create-task body from already-known projectId + names, to the
- * REAL backend contract (DOC-BACKEND-CONTRACT). Ownership is PER-STAGE: there is
- * no top-level owner_id/reporter_id. owner/reporter resolve to a SINGLE
- * `stage_responsibilities` entry whose stage_id is the stage the task is created
- * in (derived from the chosen/derived status). Custom fields are a `field_values`
- * map keyed by field UUID; labels are `label_ids`.
+ * REAL backend contract (DOC-BACKEND-CONTRACT). Ownership is FLAT: `owner` and
+ * `reporter` resolve to top-level `owner_id`/`reporter_id`. Custom fields are a
+ * `field_values` map keyed by field UUID; labels are `label_ids`.
  */
 async function buildCreateBody(
 	ctx: OpContext,
@@ -397,7 +403,6 @@ async function buildCreateBody(
 		status?: string;
 		owner?: string;
 		reporter?: string;
-		assignments?: { stage: string; owner?: string; reporter?: string }[];
 		labels?: string[];
 		priority?: string;
 		due_date?: string;
@@ -419,24 +424,17 @@ async function buildCreateBody(
 		body.guest_description = row.guest_description;
 	}
 
-	// The status carries its stage; resolve it (and the stage it belongs to) once so
-	// both the status_id and the per-stage responsibility entry can use it.
+	// The status carries its stage; resolve it once (the server derives the stage).
 	const resolvedStatus = await resolveStatusWithStage(ctx, projectId, row.stage, row.status);
 	if (resolvedStatus !== undefined) body.status_id = resolvedStatus.id;
 
-	// owner/reporter (single, on the create stage) + assignments[] (explicit
-	// per-stage) -> stage_responsibilities. Every entry carries a stage_id (the
-	// backend 422s a stage-less one). See DATATYPE-CREATE-TASK-INPUT.
-	const responsibilities = await buildStageResponsibilities(
-		ctx,
-		projectId,
-		resolvedStatus?.stage_id,
-		row.owner,
-		row.reporter,
-		row.assignments
-	);
-	if (responsibilities !== undefined) {
-		body.stage_responsibilities = responsibilities;
+	// owner/reporter -> TOP-LEVEL owner_id/reporter_id. No stage to derive: a task
+	// has one owner and one reporter (DATATYPE-CREATE-TASK-INPUT).
+	if (row.owner !== undefined) {
+		body.owner_id = (await ctx.resolver.resolveUser(projectId, row.owner)).id;
+	}
+	if (row.reporter !== undefined) {
+		body.reporter_id = (await ctx.resolver.resolveUser(projectId, row.reporter)).id;
 	}
 
 	const labelIds = await resolveLabelIds(ctx, projectId, row.labels);
@@ -447,78 +445,6 @@ async function buildCreateBody(
 	}
 
 	return body;
-}
-
-/**
- * The stage of the project's default status (first by position) — what the backend
- * assigns when a task is created without an explicit status. Used to anchor a
- * `stage_responsibilities` entry when the caller named neither status nor stage.
- */
-async function defaultStageId(ctx: OpContext, projectId: string): Promise<string> {
-	const wf = await ctx.resolver.getWorkflow(projectId);
-	const first = [...wf.statuses].sort((a, b) =>
-		a.position < b.position ? -1 : a.position > b.position ? 1 : 0
-	)[0];
-	if (first === undefined) {
-		throw new McpError(
-			'validation_failed',
-			'Cannot assign an owner: the project has no statuses to derive a stage from.'
-		);
-	}
-	return first.stage_id;
-}
-
-/**
- * Build `stage_responsibilities[]` from the convenience `owner`/`reporter` (one
- * entry on the create stage) and/or explicit `assignments[]` (one per named
- * stage), merged by stage. Every entry carries a stage_id (the backend rejects a
- * stage-less one). Returns undefined when no ownership was specified.
- */
-async function buildStageResponsibilities(
-	ctx: OpContext,
-	projectId: string,
-	createStageId: string | undefined,
-	owner: string | undefined,
-	reporter: string | undefined,
-	assignments: { stage: string; owner?: string; reporter?: string }[] | undefined
-): Promise<{ stage_id: string; owner_id?: string; reporter_id?: string }[] | undefined> {
-	const byStage = new Map<string, { stage_id: string; owner_id?: string; reporter_id?: string }>();
-	const entryFor = (stageId: string) => {
-		let e = byStage.get(stageId);
-		if (e === undefined) {
-			e = { stage_id: stageId };
-			byStage.set(stageId, e);
-		}
-		return e;
-	};
-
-	// Explicit per-stage assignments first.
-	if (assignments !== undefined) {
-		for (const a of assignments) {
-			const stageId = (await ctx.resolver.resolveStage(projectId, a.stage)).id;
-			const e = entryFor(stageId);
-			if (a.owner !== undefined) {
-				e.owner_id = (await ctx.resolver.resolveUser(projectId, a.owner)).id;
-			}
-			if (a.reporter !== undefined) {
-				e.reporter_id = (await ctx.resolver.resolveUser(projectId, a.reporter)).id;
-			}
-		}
-	}
-
-	// Flat owner/reporter -> the create stage (default-status stage when unnamed).
-	if (owner !== undefined || reporter !== undefined) {
-		const stageId = createStageId ?? (await defaultStageId(ctx, projectId));
-		const e = entryFor(stageId);
-		if (owner !== undefined) {
-			e.owner_id = (await ctx.resolver.resolveUser(projectId, owner)).id;
-		}
-		if (reporter !== undefined) {
-			e.reporter_id = (await ctx.resolver.resolveUser(projectId, reporter)).id;
-		}
-	}
-
-	return byStage.size > 0 ? [...byStage.values()] : undefined;
 }
 
 /**
@@ -618,7 +544,9 @@ const taskListInput = z.object({
 	project: z.string(),
 	status: z.string().optional(),
 	stage: z.string().optional(),
-	assignee: z.string().optional(),
+	// Owner and Reporter — the words the product uses. There is no "assignee".
+	owner: z.string().optional(),
+	reporter: z.string().optional(),
 	label: z.string().optional(),
 	query: z.string().optional(),
 	archived: z.boolean().optional(),
@@ -630,7 +558,7 @@ type TaskListInput = z.infer<typeof taskListInput>;
 const taskList: Operation<TaskListInput, Page<TaskSummary>> = {
 	name: 'list_tasks',
 	summary:
-		"List a project's tasks, filtered by status/stage/assignee/label/query. Returns one page with a cursor.",
+		"List a project's tasks, filtered by status/stage/owner/reporter/label/query. Returns one page with a cursor.",
 	input: taskListInput,
 	meta: { cli: { group: 'task', verb: 'list', positionals: ['project'] } },
 	async run(input, ctx): Promise<Page<TaskSummary>> {
@@ -654,11 +582,13 @@ const taskList: Operation<TaskListInput, Page<TaskSummary>> = {
 				input.stage !== undefined
 					? (await ctx.resolver.resolveStage(project.id, input.stage)).id
 					: undefined;
-			// The backend filters by owner_id/reporter_id (no single assignee); map the
-			// `assignee` convenience to owner_id.
 			const ownerId =
-				input.assignee !== undefined
-					? (await ctx.resolver.resolveUser(project.id, input.assignee)).id
+				input.owner !== undefined
+					? (await ctx.resolver.resolveUser(project.id, input.owner)).id
+					: undefined;
+			const reporterId =
+				input.reporter !== undefined
+					? (await ctx.resolver.resolveUser(project.id, input.reporter)).id
 					: undefined;
 			const labelId =
 				input.label !== undefined
@@ -669,6 +599,7 @@ const taskList: Operation<TaskListInput, Page<TaskSummary>> = {
 				status: statusId,
 				stage_id: stageId,
 				owner_id: ownerId,
+				reporter_id: reporterId,
 				label_id: labelId,
 				q: input.query,
 				limit: input.limit ?? DEFAULT_LIMIT,
@@ -725,13 +656,6 @@ const taskShow: Operation<TaskShowInput, TaskDetail> = {
 
 const priorityEnum = z.enum(['none', 'low', 'medium', 'high', 'urgent']);
 
-/** One per-stage assignment: who owns/reports the task while it is in that stage. */
-const assignmentSchema = z.object({
-	stage: z.string(),
-	owner: z.string().optional(),
-	reporter: z.string().optional(),
-});
-
 const taskCreateInput = z.object({
 	project: z.string(),
 	title: z.string(),
@@ -740,7 +664,6 @@ const taskCreateInput = z.object({
 	status: z.string().optional(),
 	owner: z.string().optional(),
 	reporter: z.string().optional(),
-	assignments: z.array(assignmentSchema).optional(),
 	labels: z.array(z.string()).optional(),
 	priority: priorityEnum.optional(),
 	due_date: z.string().optional(),
@@ -786,7 +709,6 @@ const taskBulkCreateInput = z.object({
 				status: z.string().optional(),
 				owner: z.string().optional(),
 				reporter: z.string().optional(),
-				assignments: z.array(assignmentSchema).optional(),
 				labels: z.array(z.string()).optional(),
 				priority: priorityEnum.optional(),
 				due_date: z.string().optional(),
@@ -894,15 +816,18 @@ type TaskUpdateInput = z.infer<typeof taskUpdateInput>;
 const taskUpdate: Operation<TaskUpdateInput, TaskDetail> = {
 	name: 'update_task',
 	summary:
-		'Update a task. Content goes through PATCH; owner/reporter/labels/fields fan out to their endpoints.',
+		'Update a task, including its owner/reporter (pass null to clear). Labels and custom fields fan out to their endpoints.',
 	input: taskUpdateInput,
 	meta: { cli: { group: 'task', verb: 'update', positionals: ['task'] } },
 	async run(input, ctx): Promise<TaskDetail> {
 		const ref = await resolveTaskRef(ctx, input.task);
 		const projectId = ref.projectId;
 
-		// 1) CONTENT-ONLY PATCH (DOC-BACKEND-CONTRACT): the backend PATCH accepts NONE
-		// of owner/reporter/labels/field_values. The client adds If-Match (read-first).
+		// 1) THE PATCH (DOC-BACKEND-CONTRACT): content fields PLUS owner/reporter,
+		// which are top-level nullable columns now. One write, one If-Match
+		// (read-first, added by the client) — so a reassignment can no longer land
+		// while the content change is rejected. Labels and field_values still are
+		// NOT accepted here.
 		const patch: Record<string, unknown> = {};
 		if (input.title !== undefined) patch.title = input.title;
 		if (input.description !== undefined) patch.description = input.description;
@@ -915,34 +840,26 @@ const taskUpdate: Operation<TaskUpdateInput, TaskDetail> = {
 		if (input.guest_description !== undefined) {
 			patch.guest_description = input.guest_description;
 		}
+
+		// owner/reporter: a name resolves to a UUID; an explicit null CLEARS the
+		// field (and must survive as null, not be dropped as "unset").
+		if (input.owner !== undefined) {
+			patch.owner_id =
+				input.owner === null ? null : (await ctx.resolver.resolveUser(projectId, input.owner)).id;
+		}
+		if (input.reporter !== undefined) {
+			patch.reporter_id =
+				input.reporter === null
+					? null
+					: (await ctx.resolver.resolveUser(projectId, input.reporter)).id;
+		}
+
 		if (Object.keys(patch).length > 0) {
 			await failingSubUpdate('content', () => ctx.client.updateTask(ref.id, patch));
 		}
 
-		// 2) FAN-OUT (best-effort, after the content PATCH). Each convenience input
-		// hits its dedicated endpoint; a failure surfaces WHICH sub-update failed.
-
-		// owner/reporter -> stage-responsibilities on the task's CURRENT stage.
-		if (input.owner !== undefined || input.reporter !== undefined) {
-			const stageId = await currentStageId(ctx, ref);
-			const entry: Record<string, unknown> = {};
-			if (stageId !== undefined) entry.stage_id = stageId;
-			if (input.owner !== undefined) {
-				entry.owner_id =
-					input.owner === null ? null : (await ctx.resolver.resolveUser(projectId, input.owner)).id;
-			}
-			if (input.reporter !== undefined) {
-				entry.reporter_id =
-					input.reporter === null
-						? null
-						: (await ctx.resolver.resolveUser(projectId, input.reporter)).id;
-			}
-			await failingSubUpdate('responsibilities', () =>
-				ctx.client.setStageResponsibilities(ref.id, {
-					responsibilities: [entry],
-				})
-			);
-		}
+		// 2) FAN-OUT (best-effort, after the PATCH). Labels and custom fields still
+		// have dedicated endpoints; a failure surfaces WHICH sub-update failed.
 
 		// add_labels / remove_labels -> POST / DELETE /tasks/{id}/labels[/{labelId}].
 		const addLabelIds = await resolveLabelIds(ctx, projectId, input.add_labels);
@@ -1263,6 +1180,41 @@ const listComments: Operation<ListCommentsInput, Page<TaskComment>> = {
 	},
 };
 
+// ---------- get_task_timeline ----------
+
+const TIMELINE_DEFAULT_LIMIT = 50;
+const TIMELINE_MAX_LIMIT = 200;
+
+const taskTimelineInput = z.object({
+	task: z.string(),
+	/** Narrow to one kind, e.g. "owner_changed" / "status_changed". */
+	event_type: z.string().optional(),
+	limit: z.number().int().min(1).max(TIMELINE_MAX_LIMIT).optional(),
+	cursor: z.string().optional(),
+});
+type TaskTimelineInput = z.infer<typeof taskTimelineInput>;
+
+const taskTimeline: Operation<TaskTimelineInput, Page<TimelineEvent>> = {
+	name: 'get_task_timeline',
+	summary:
+		"A task's history (who changed what, when), OLDEST first. Optionally filter to one event_type, e.g. owner_changed.",
+	input: taskTimelineInput,
+	meta: { cli: { group: 'task', verb: 'timeline', positionals: ['task'] } },
+	async run(input, ctx): Promise<Page<TimelineEvent>> {
+		const ref = await resolveTaskRef(ctx, input.task);
+		const page = await ctx.client.getTaskTimeline(ref.id, {
+			limit: input.limit ?? TIMELINE_DEFAULT_LIMIT,
+			cursor: input.cursor,
+			event_type: input.event_type,
+		});
+		// Only the actor is joined to a name; the per-event values stay raw because
+		// their shape is event_type-dependent (DATATYPE-TIMELINE-EVENT).
+		const wf = ref.projectId ? await ctx.resolver.getWorkflow(ref.projectId) : EMPTY_WORKFLOW;
+		const items = page.data.map((raw) => hydrateTimelineEvent(raw, wf));
+		return { items, next_cursor: page.cursor, has_more: page.cursor !== null };
+	},
+};
+
 // ============ Registry ============
 
 /** Every operation, in surface order (Phase-1 read-only, then Phase-2). */
@@ -1273,6 +1225,7 @@ export const operations: Operation[] = [
 	listMyTasks as Operation,
 	taskList as Operation,
 	taskShow as Operation,
+	taskTimeline as Operation,
 	searchTasks as Operation,
 	taskCreate as Operation,
 	taskBulkCreate as Operation,

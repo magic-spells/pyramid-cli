@@ -19,10 +19,25 @@ interface TaskSummary {
   description: string | null;             // truncated to one line in list render
   status: { id: string; name: string };
   stage: { id: string; name: string };    // derived from status, hydrated by the MCP
-  owner: { id: string; display_name: string } | null;
-  reporter: { id: string; display_name: string } | null;
+  owner: UserStub | null;
+  reporter: UserStub | null;
   labels: string[];
   archived: boolean;
   updated_at: string;     // ISO 8601 — rendered UTC-labeled (rule 12)
 }
+
+interface UserStub {
+  id: string;
+  display_name: string;   // always joined — never a bare UUID
+  first_name?: string | null;
+  last_name?: string | null;
+  avatar_url?: string | null;
+  job_title?: string | null;  // the person's role in the workspace, e.g. "Design Lead"
+}
 ```
+
+**Owner and Reporter, never "assignee."** A task has exactly one of each, both nullable; they
+are top-level fields on the wire ([[DOC-BACKEND-CONTRACT]]). `first_name` / `last_name` /
+`avatar_url` / `job_title` arrive only when the caller asked for `expand`, except `job_title`,
+which the MCP can also fill from the cached workflow's member rows. Renderers show
+`display_name` plus `job_title` when it is known.

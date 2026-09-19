@@ -63,7 +63,10 @@ export interface WorkflowMember {
 	id: string;
 	display_name: string;
 	email: string;
+	/** Project role (permission): admin | pm | member | viewer | guest. */
 	role: string;
+	/** The person's own title ("Design Lead") — NOT the permission role. */
+	job_title?: string;
 }
 export interface CustomFieldDef {
 	id: string;
@@ -81,9 +84,19 @@ export interface Workflow {
 	templates: { id: string; name: string; fields: CustomFieldDef[] }[];
 }
 
+/**
+ * A person as every hydrated surface shows them. `display_name` is always joined
+ * (never a bare UUID); the rest arrive from `?expand=owner,reporter` — except
+ * `job_title`, which the workflow's member rows also carry, so an Owner can be
+ * labelled without paying for expand.
+ */
 export interface UserStub {
 	id: string;
 	display_name: string;
+	first_name?: string | null;
+	last_name?: string | null;
+	avatar_url?: string | null;
+	job_title?: string | null;
 }
 
 export interface TaskSummary {
@@ -135,6 +148,23 @@ export interface TaskDetail extends TaskSummary {
 	dependencies?: { id: string; key: string; type: string }[];
 }
 
+/**
+ * One hydrated row of a task's history (DATATYPE-TIMELINE-EVENT). The values are
+ * deliberately `unknown`: their shape depends on `event_type` (for
+ * owner_changed/reporter_changed they are a BARE user uuid or null, not an
+ * object), and the server adds event types without a client change.
+ */
+export interface TimelineEvent {
+	id: string;
+	task_id: string;
+	event_type: string;
+	actor: UserStub | null;
+	old_value: unknown;
+	new_value: unknown;
+	data: Record<string, unknown>;
+	created_at: string;
+}
+
 export interface WhoAmI {
 	user: { id: string; display_name: string; email: string };
 	workspace: { id: string; slug: string; name: string; role: 'owner' | 'admin' | 'member' };
@@ -156,17 +186,6 @@ export interface CustomFieldValue {
 	value: unknown;
 }
 
-/**
- * The wire shape of a per-stage responsibility entry (DOC-BACKEND-CONTRACT). A
- * task has NO single owner: ownership is per-stage. owner/reporter inputs resolve
- * to ONE entry whose stage_id is the stage the task is created/lives in.
- */
-export interface StageResponsibility {
-	stage_id: string;
-	owner_id?: string;
-	reporter_id?: string;
-}
-
 export type TaskPriority = 'none' | 'low' | 'medium' | 'high' | 'urgent';
 
 export interface CreateTaskInput {
@@ -177,7 +196,6 @@ export interface CreateTaskInput {
 	status?: string;
 	owner?: string;
 	reporter?: string;
-	assignments?: { stage: string; owner?: string; reporter?: string }[];
 	labels?: string[];
 	priority?: TaskPriority;
 	due_date?: string;
@@ -206,10 +224,11 @@ export interface UpdateTaskInput {
 	guest_visible?: boolean;
 	guest_title?: string;
 	guest_description?: string;
-	// Convenience fields the PATCH does not accept — the op fans them out to the
-	// dedicated stage-responsibilities / labels / field-values endpoints.
-	owner?: string | null; // null clears
+	// owner/reporter ride the SAME PATCH as the content fields; null clears.
+	owner?: string | null;
 	reporter?: string | null;
+	// Convenience fields the PATCH does not accept — the op fans them out to the
+	// dedicated labels / field-values endpoints.
 	add_labels?: string[];
 	remove_labels?: string[];
 	custom_fields?: CustomFieldValue[];

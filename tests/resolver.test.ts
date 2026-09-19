@@ -97,7 +97,12 @@ const APOLLO_LABELS: readonly unknown[] = [
 
 // Real /members rows carry name/email under a nested `user` (DOC-BACKEND-CONTRACT).
 const APOLLO_MEMBERS: readonly unknown[] = [
-	{ user: { id: 'u-ann', display_name: 'Ann Smith', email: 'ann@example.com' }, role: 'admin' },
+	// job_title rides the MEMBERSHIP row, beside the permission `role`.
+	{
+		user: { id: 'u-ann', display_name: 'Ann Smith', email: 'ann@example.com' },
+		role: 'admin',
+		job_title: 'Design Lead',
+	},
 	// email exact "sam@example.com" vs display_name "Sam Jones": email wins.
 	{ user: { id: 'u-sam', display_name: 'Sam Jones', email: 'sam@example.com' }, role: 'member' },
 	// Another member whose display_name also contains "sam" → fuzzy ambiguity
@@ -281,6 +286,13 @@ describe('Resolver — getWorkflow merges the four separate endpoints', () => {
 			display_name: 'Sam Jones',
 			email: 'sam@example.com',
 		});
+		// job_title comes off the membership row and is NOT the permission role;
+		// a member without one has no job_title key at all.
+		expect(wf.members.find((m) => m.id === 'u-ann')).toMatchObject({
+			role: 'admin',
+			job_title: 'Design Lead',
+		});
+		expect(wf.members.find((m) => m.id === 'u-sam')).not.toHaveProperty('job_title');
 		// templates from /task-schema, with fields_by_template folded into fields[].
 		expect(wf.templates).toHaveLength(1);
 		expect(wf.templates[0]!.id).toBe('tpl-default');
