@@ -188,7 +188,9 @@ export async function runLogin(argv: string[], io: AuthIO = realIO): Promise<num
 		if (error) {
 			res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
 			res.end('Pyramid login cancelled. Return to your terminal.\n');
-			io.out(error === 'access_denied' ? 'Pyramid login cancelled.' : `Pyramid login failed: ${error}`);
+			io.out(
+				error === 'access_denied' ? 'Pyramid login cancelled.' : `Pyramid login failed: ${error}`
+			);
 			void closeServer(server).then(() => finish(1));
 			return;
 		}
@@ -218,7 +220,9 @@ export async function runLogin(argv: string[], io: AuthIO = realIO): Promise<num
 			});
 		});
 	} catch (err) {
-		io.out(`Could not start the local Pyramid login server: ${err instanceof Error ? err.message : String(err)}`);
+		io.out(
+			`Could not start the local Pyramid login server: ${err instanceof Error ? err.message : String(err)}`
+		);
 		return 1;
 	}
 

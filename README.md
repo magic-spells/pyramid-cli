@@ -96,9 +96,10 @@ The server exposes **16 tools**. Every tool takes human **names/keys** as input 
 
 | Tool | What it does |
 |---|---|
-| `list_my_tasks` | Tasks you own or report, newest first, across projects. Filter by `role` (owner/reporter/any) and `limit`; paginate with `cursor`. |
-| `list_tasks` | A project's tasks, filtered by `status` / `stage` / `assignee` / `label` / `query`, or `archived` for the archive. Paginated. |
+| `list_my_tasks` | Tasks you own or report, newest first, across projects. Cap with `limit`; paginate with `cursor`. |
+| `list_tasks` | A project's tasks, filtered by `status` / `stage` / `owner` / `reporter` / `label` / `query`, or `archived` for the archive. Paginated. |
 | `get_task` | One task's full detail by key (`WEB-42`) or UUID; `expand` inlines owner/reporter/labels. |
+| `get_task_timeline` | A task's history — who changed what, when — oldest first. Narrow with `event_type` (e.g. `owner_changed`). Paginated. |
 | `search_tasks` | Full-text search across the workspace by title/key/content. |
 
 **Tasks — write**
@@ -107,7 +108,7 @@ The server exposes **16 tools**. Every tool takes human **names/keys** as input 
 |---|---|
 | `create_task` | Create a task — names/keys for stage, status, owner, reporter, labels, priority, due date, estimate, and custom fields. |
 | `create_tasks_bulk` | Create up to 100 tasks at once from a required template, with shared `defaults`. |
-| `update_task` | Edit a task — title/description/priority/dates/estimate, owner/reporter, add/remove labels, custom fields. |
+| `update_task` | Edit a task — title/description/priority/dates/estimate and its owner/reporter (pass an empty value to clear one), plus add/remove labels and custom fields. |
 | `move_task` | Move a task to a target status (which carries its stage), optionally positioned `after_task` / `before_task`. |
 | `archive_task` | Soft-archive or unarchive a task. Reversible. |
 | `delete_task` | Hard-delete a task. **Gated** — requires `PYRAMID_ALLOW_DESTRUCTIVE=1`, else `destructive_action_disabled`. |
@@ -141,11 +142,12 @@ More commands:
 pyramid whoami
 pyramid project list
 pyramid project workflow <PROJECT>
-pyramid task next [--role owner|reporter|any] [--limit N]
-pyramid task list <PROJECT> [--status S] [--stage G] [--label L] [--archived]
+pyramid task next [--limit N]
+pyramid task list <PROJECT> [--status S] [--stage G] [--owner U] [--reporter U] [--label L] [--archived]
 pyramid task show <KEY> [--expand]
+pyramid task timeline <KEY> [--event-type owner_changed] [--limit N]
 pyramid task search <QUERY> [--limit N]
-pyramid task create <TITLE> --project P [--status S] [--owner U] [--labels L] [--priority P] [--due-date D]
+pyramid task create <TITLE> --project P [--status S] [--owner U] [--reporter U] [--labels L] [--priority P] [--due-date D]
 pyramid task move <KEY> --status "In Review" [--after-task KEY | --before-task KEY]
 pyramid task archive <KEY>
 pyramid task delete <KEY>          # gated by PYRAMID_ALLOW_DESTRUCTIVE=1

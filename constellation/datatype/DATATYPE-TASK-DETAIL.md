@@ -6,6 +6,7 @@ connections:
   - DATATYPE-COMMENT
   - DATATYPE-TASK-REFERENCE
   - PLAN-V2-ROADMAP
+  - API-TOOL-GET-TASK-TIMELINE
 ---
 
 Full task shape returned by `get_task` and by create / update / move ops. The backend's only
@@ -27,6 +28,7 @@ interface TaskDetail extends TaskSummary {
 }
 ```
 
-`timeline` is **not** in the MVP — `GET /v1/tasks/{id}/timeline` is unbuilt server-side
-(deferred to [[PLAN-V2-ROADMAP]]). `field_values` come from the separate `/editor` endpoint, not
-the base task. `references` = [[DATATYPE-TASK-REFERENCE]].
+`timeline` is **not** a field on this shape — the task history is its own paginated tool,
+[[API-TOOL-GET-TASK-TIMELINE]] over `GET /v1/tasks/{id}/timeline` (now built server-side; the
+earlier note deferring it to [[PLAN-V2-ROADMAP]] is obsolete). `field_values` come from the
+separate `/editor` endpoint, not the base task. `references` = [[DATATYPE-TASK-REFERENCE]].

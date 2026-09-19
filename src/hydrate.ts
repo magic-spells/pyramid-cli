@@ -7,7 +7,7 @@
 // any hydrated field a model/user would read:
 //   - status_id            -> { id, name }            (status.name)
 //   - status.stage_id      -> stage { id, name }      (status carries its stage)
-//   - owner_id/reporter_id -> UserStub | null         (member.display_name)
+//   - owner_id/reporter_id -> UserStub | null         (member.display_name + job_title)
 //   - author_id/mentions[] -> UserStub                (member.display_name)
 //   - label ids            -> label names (string[])
 // `key` is provided by the server and passed through. Every field is read
@@ -19,6 +19,7 @@ import type {
 	TaskDetail,
 	TaskReference,
 	TaskSummary,
+	TimelineEvent,
 	UserStub,
 	Workflow,
 } from './types.js';
@@ -127,6 +128,49 @@ function hydrateReply(raw: any, workflow: Workflow): Omit<TaskComment, 'replies'
 	};
 }
 
+// ============ Timeline ============
+
+/**
+ * The event kinds whose `old_value`/`new_value` are a BARE user uuid (or null):
+ * the server sends them exactly like `status_changed` sends a status uuid. These
+ * are the only shapes we claim to know, so they are the only ones joined to a
+ * name (DATATYPE-TIMELINE-EVENT: "resolves names only where it knows the type").
+ */
+const PERSON_VALUED_EVENTS = new Set(['owner_changed', 'reporter_changed']);
+
+/**
+ * Raw timeline row -> TimelineEvent. The actor is always joined to a name. The
+ * values stay `unknown` and are passed through UNTOUCHED except for the handful
+ * of event types whose values we know are a bare user uuid — those become a
+ * `UserStub` so a reader sees "Ann Smith", not a UUID. An unknown event_type (and
+ * any unexpected value shape inside a known one) survives verbatim, so a new
+ * server event kind never breaks or crashes this.
+ */
+export function hydrateTimelineEvent(raw: any, workflow: Workflow): TimelineEvent {
+	const e = obj(raw);
+	const eventType = str(e.event_type);
+	const value = (v: unknown): unknown => {
+		if (!PERSON_VALUED_EVENTS.has(eventType)) return v ?? null;
+		// A non-string (or empty) value is not the uuid we expected — pass it through
+		// rather than silently dropping it.
+		if (typeof v !== 'string' || v.length === 0) return v ?? null;
+		const stub = userStubFromAny(workflow, v);
+		// A user the cached workflow does not know resolves to an EMPTY display_name;
+		// keep the raw uuid then — a blank cell would lose the only fact we have.
+		return stub && stub.display_name.length > 0 ? stub : v;
+	};
+	return {
+		id: str(e.id),
+		task_id: str(e.task_id) || str(obj(e.data).task_id),
+		event_type: eventType,
+		actor: userStubFromAny(workflow, e.actor ?? e.actor_id),
+		old_value: value(e.old_value),
+		new_value: value(e.new_value),
+		data: obj(e.data),
+		created_at: str(e.created_at),
+	};
+}
+
 // ============ Reference (no UUIDs to join — pass through defensively) ============
 
 const REFERENCE_TYPES = [
@@ -204,10 +248,8 @@ function displayName(wf: Workflow, userId: string): string {
 function ownerStub(wf: Workflow, expanded: unknown, idValue: unknown): UserStub | null {
 	const stub = userStubFromAny(wf, expanded);
 	if (stub) return stub;
-	if (typeof idValue === 'string' && idValue.length > 0) {
-		return { id: idValue, display_name: displayName(wf, idValue) };
-	}
-	return null;
+	// Not expanded — a bare id still gets the name AND the workflow's job_title.
+	return userStubFromAny(wf, idValue);
 }
 
 /**
@@ -223,11 +265,23 @@ function authorStub(wf: Workflow, expanded: unknown, idValue: unknown): UserStub
 	);
 }
 
-/** A user value that may be an expanded stub or a bare id -> UserStub | null. */
+/** The workflow's member row for a user id, if the workflow knows them. */
+function memberOf(wf: Workflow, userId: string) {
+	return wf.members.find((m) => m.id === userId);
+}
+
+/**
+ * A user value that may be an expanded stub (`{id, display_name, first_name,
+ * last_name, avatar_url, job_title}`) or a bare id -> UserStub | null.
+ *
+ * The optional profile fields ride only the EXPANDED shape, so they are set only
+ * when present — except `job_title`, which the cached workflow's member rows also
+ * carry, letting a renderer label an Owner without paying for `?expand`.
+ */
 function userStubFromAny(wf: Workflow, value: unknown): UserStub | null {
 	if (typeof value === 'string') {
 		if (value.length === 0) return null;
-		return { id: value, display_name: displayName(wf, value) };
+		return withProfile(wf, { id: value, display_name: displayName(wf, value) }, {});
 	}
 	if (value && typeof value === 'object') {
 		const u = obj(value);
@@ -237,9 +291,28 @@ function userStubFromAny(wf: Workflow, value: unknown): UserStub | null {
 			typeof u.display_name === 'string' && u.display_name.length > 0
 				? u.display_name
 				: displayName(wf, id);
-		return { id, display_name: dn };
+		return withProfile(wf, { id, display_name: dn }, u);
 	}
 	return null;
+}
+
+/**
+ * Attach the optional profile fields to a stub. Each is copied only when the raw
+ * row actually carried it (an absent field stays absent rather than becoming an
+ * explicit null); `job_title` falls back to the workflow member row.
+ */
+function withProfile(wf: Workflow, stub: UserStub, raw: Record<string, unknown>): UserStub {
+	if (raw.first_name !== undefined) stub.first_name = nullableStr(raw.first_name);
+	if (raw.last_name !== undefined) stub.last_name = nullableStr(raw.last_name);
+	if (raw.avatar_url !== undefined) stub.avatar_url = nullableStr(raw.avatar_url);
+
+	const jobTitle =
+		typeof raw.job_title === 'string' && raw.job_title.length > 0
+			? raw.job_title
+			: memberOf(wf, stub.id)?.job_title;
+	if (jobTitle) stub.job_title = jobTitle;
+
+	return stub;
 }
 
 /** mentions[] (ids or stubs) -> UserStub[] (display names joined). */

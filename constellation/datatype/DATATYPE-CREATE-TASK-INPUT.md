@@ -22,15 +22,18 @@ interface CreateTaskInput {
   due_date?: string;          // YYYY-MM-DD or RFC3339 (stored as a date)
   estimate_hours?: number;
   labels?: string[];          // label names
-  // Assignment is PER-STAGE — the server has NO top-level owner/assignee field:
-  assignments?: { stage: string; owner?: string; reporter?: string }[]; // → stage_responsibilities[]
+  owner?: string;             // member name/email -> owner_id
+  reporter?: string;          // member name/email -> reporter_id
   custom_fields?: { field: string; value: unknown }[]; // MCP validates value against field_type
   guest_visible?: boolean; guest_title?: string; guest_description?: string;
 }
 ```
 
-**Assignment quirk:** "assign to Bob" targets the task's create stage. If the user names neither a
-stage nor status, the operation resolves the project's first status and uses that status's stage for
-the `stage_responsibilities` entry. **Dependencies are NOT settable at create**. Custom-field values
-are resolved to field UUIDs and validated against the field's `field_type` before the write
-([[DOC-DESIGN-RULES]] rule 8).
+**Ownership is flat.** A task has one owner and one reporter; `owner`/`reporter` resolve to
+top-level `owner_id`/`reporter_id` on the create body ([[DOC-BACKEND-CONTRACT]]). There is no
+stage to derive and no `assignments[]` — the per-stage `stage_responsibilities` model, and the
+`assignments[]` input that fed it, were both removed when the server dropped per-stage
+ownership. A name that resolves to a non-member of the project → 422 `validation_failed`.
+
+**Dependencies are NOT settable at create.** Custom-field values are resolved to field UUIDs and
+validated against the field's `field_type` before the write ([[DOC-DESIGN-RULES]] rule 8).

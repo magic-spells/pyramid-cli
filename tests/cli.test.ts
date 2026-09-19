@@ -177,6 +177,25 @@ describe('render — emits JSON when --json or non-TTY (DOC-CLI-OUTPUT)', () => 
 		expect(cap.err).toContain('CUR-2');
 	});
 
+	it('shows Owner and Reporter with their job_title when one is known', () => {
+		cap = capture({ isTTY: true });
+		render(
+			{
+				key: 'APO-1',
+				owner: { id: 'u-ann', display_name: 'Ann Smith', job_title: 'Design Lead' },
+				reporter: { id: 'u-bob', display_name: 'Bob Jones' },
+			},
+			{ ...BASE_OPTS, json: false }
+		);
+		cap.restore();
+
+		// the title is what says whether the right person holds it.
+		expect(cap.out).toContain('Ann Smith (Design Lead)');
+		// no title known -> the bare name, never an empty "()".
+		expect(cap.out).toContain('Bob Jones');
+		expect(cap.out).not.toContain('Bob Jones (');
+	});
+
 	it('JSON mode preserves a Page envelope including the cursor on stdout', () => {
 		cap = capture({ isTTY: true });
 		const page = { items: [{ key: 'APO-1' }], next_cursor: 'CUR-2', has_more: true };

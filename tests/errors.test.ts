@@ -75,6 +75,28 @@ describe('mapHttpError — status -> code', () => {
 	it('maps 422 to validation_failed', () => {
 		const err = mapHttpError(422, envelope('unprocessable'));
 		expect(err.code).toBe('validation_failed');
+		expect(err.hint).toBeUndefined();
+	});
+
+	// A PATCH can carry both owner_id and reporter_id, and a non-member in either
+	// half yields the SAME message — only details.field says which one.
+	it('names details.field in the hint on a 422 (non-member owner/reporter)', () => {
+		const err = mapHttpError(422, {
+			error: {
+				code: 'validation_failed',
+				message: 'user is not a member of this project',
+				details: { field: 'owner_id', user_id: 'u-stranger' },
+			},
+		});
+		expect(err.code).toBe('validation_failed');
+		expect(err.hint).toContain('owner_id');
+	});
+
+	it('ignores a details blob with no usable field', () => {
+		const err = mapHttpError(422, {
+			error: { code: 'validation_failed', message: 'boom', details: { field: 42 } },
+		});
+		expect(err.hint).toBeUndefined();
 	});
 
 	it('maps 429 to rate_limited', () => {

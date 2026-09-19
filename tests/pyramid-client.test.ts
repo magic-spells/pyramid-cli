@@ -215,3 +215,48 @@ describe('PyramidClient — listTasks query params (real names)', () => {
 		expect(calls[0]!.url).toContain('/v1/projects/p1/tasks/archived');
 	});
 });
+
+describe('PyramidClient — the flat-ownership contract (no stage-responsibilities)', () => {
+	it('has no setStageResponsibilities method — the route was removed server-side', () => {
+		const client = new PyramidClient(CONFIG) as unknown as Record<string, unknown>;
+		expect(client.setStageResponsibilities).toBeUndefined();
+	});
+
+	it('listMyTasks never sends ?role= (the server accepts and ignores it)', async () => {
+		const calls: Call[] = [];
+		undiciRequest.mockImplementation((url: string, init: { method: string }) => {
+			calls.push({ url, method: init.method, headers: {} });
+			return res({ status: 200, body: { data: [], cursor: null } });
+		});
+
+		const client = new PyramidClient(CONFIG);
+		await client.listMyTasks({ limit: 5 });
+
+		expect(calls[0]!.url).toContain('/v1/me/tasks');
+		expect(calls[0]!.url).toContain('limit=5');
+		expect(calls[0]!.url).not.toContain('role=');
+	});
+
+	it('getTaskTimeline hits /tasks/{id}/timeline with limit/cursor/event_type', async () => {
+		const calls: Call[] = [];
+		undiciRequest.mockImplementation((url: string, init: { method: string }) => {
+			calls.push({ url, method: init.method, headers: {} });
+			return res({ status: 200, body: { data: [{ id: 'ev' }], cursor: 'c2' } });
+		});
+
+		const client = new PyramidClient(CONFIG);
+		const page = await client.getTaskTimeline('t1', {
+			limit: 200,
+			cursor: 'c1',
+			event_type: 'owner_changed',
+		});
+
+		expect(calls[0]!.method).toBe('GET');
+		expect(calls[0]!.url).toContain('/v1/tasks/t1/timeline');
+		expect(calls[0]!.url).toContain('limit=200');
+		expect(calls[0]!.url).toContain('cursor=c1');
+		expect(calls[0]!.url).toContain('event_type=owner_changed');
+		// the raw envelope is normalized, never reshaped.
+		expect(page).toEqual({ data: [{ id: 'ev' }], cursor: 'c2' });
+	});
+});

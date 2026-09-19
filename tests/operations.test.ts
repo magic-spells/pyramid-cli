@@ -60,7 +60,14 @@ const APOLLO_WORKFLOW: Workflow = {
 	],
 	labels: [{ id: 'lb-bug', name: 'bug', color: '#f00' }],
 	members: [
-		{ id: 'u-ann', display_name: 'Ann Smith', email: 'ann@example.com', role: 'admin' },
+		{
+			id: 'u-ann',
+			display_name: 'Ann Smith',
+			email: 'ann@example.com',
+			role: 'admin',
+			// job_title is the person's OWN title, not the permission role.
+			job_title: 'Design Lead',
+		},
 		{ id: 'u-bob', display_name: 'Bob Jones', email: 'bob@example.com', role: 'member' },
 	],
 	templates: [],
@@ -249,17 +256,18 @@ describe('operation: list_my_tasks (real registry)', () => {
 		expect(page.has_more).toBe(true);
 	});
 
-	it('caps the page with the requested limit (passed through to the client)', async () => {
+	it('caps the page with the requested limit, and never sends a `role` the server ignores', async () => {
 		const op = operationsByName.get('list_my_tasks')!;
 		const client = {
 			listMyTasks: vi.fn(async (q: { role?: string; limit?: number; cursor?: string }) => {
 				expect(q.limit).toBe(5);
-				expect(q.role).toBe('owner');
+				// `?role=` is accepted-and-ignored server-side, so we must not send it.
+				expect(q).not.toHaveProperty('role');
 				return { data: [], cursor: null };
 			}),
 		};
 		const resolver = makeResolver();
-		const page = (await op.run({ role: 'owner', limit: 5 }, makeCtx(client, resolver))) as {
+		const page = (await op.run({ limit: 5 }, makeCtx(client, resolver))) as {
 			next_cursor: string | null;
 			has_more: boolean;
 		};
@@ -267,6 +275,11 @@ describe('operation: list_my_tasks (real registry)', () => {
 		// null cursor -> last page.
 		expect(page.next_cursor).toBeNull();
 		expect(page.has_more).toBe(false);
+	});
+
+	it('exposes NO `role` input at all (the server ignores the filter)', () => {
+		const op = operationsByName.get('list_my_tasks')!;
+		expect(Object.keys(op.input.shape)).toEqual(['limit', 'cursor']);
 	});
 });
 
@@ -369,7 +382,7 @@ const taskCreate: Operation<CreateTaskInput, TaskDetail> = {
 		}
 
 		// client called with RESOLVED UUIDs (never the human names). Ownership is
-		// PER-STAGE: owner -> a stage_responsibilities entry on the create stage.
+		// FLAT: owner -> a top-level owner_id.
 		const raw = await (
 			ctx.client as never as {
 				createTask: (
@@ -377,7 +390,7 @@ const taskCreate: Operation<CreateTaskInput, TaskDetail> = {
 					body: {
 						title: string;
 						status_id: string;
-						stage_responsibilities?: { stage_id: string; owner_id?: string }[];
+						owner_id?: string;
 						label_ids: string[];
 					}
 				) => Promise<unknown>;
@@ -385,13 +398,7 @@ const taskCreate: Operation<CreateTaskInput, TaskDetail> = {
 		).createTask(project.id, {
 			title: input.title,
 			status_id: statusId,
-			...(ownerId
-				? {
-						stage_responsibilities: [
-							{ stage_id: wf.statuses.find((s) => s.id === statusId)!.stage_id, owner_id: ownerId },
-						],
-					}
-				: {}),
+			...(ownerId ? { owner_id: ownerId } : {}),
 			label_ids: labelIds,
 		});
 
@@ -400,7 +407,7 @@ const taskCreate: Operation<CreateTaskInput, TaskDetail> = {
 };
 
 describe('operation contract: task.create', () => {
-	it('resolves project/status/owner/labels to UUIDs and calls createTask with the per-stage contract, then hydrates', async () => {
+	it('resolves project/status/owner/labels to UUIDs and calls createTask with a top-level owner_id, then hydrates', async () => {
 		const resolver = makeResolver();
 		const createTask = vi.fn(async () => ({
 			id: 't-new',
@@ -430,12 +437,11 @@ describe('operation contract: task.create', () => {
 		expect(resolver.resolveUser).toHaveBeenCalledWith('p-apollo', 'ann@example.com');
 		expect(resolver.resolveLabel).toHaveBeenCalledWith('p-apollo', 'bug');
 
-		// client got UUIDs in the REAL per-stage shape (stage_responsibilities), not
-		// a top-level owner_id.
+		// client got UUIDs in the REAL flat shape: a top-level owner_id.
 		expect(createTask).toHaveBeenCalledWith('p-apollo', {
 			title: 'Wire auth',
 			status_id: 'st-review',
-			stage_responsibilities: [{ stage_id: 'stg-doing', owner_id: 'u-ann' }],
+			owner_id: 'u-ann',
 			label_ids: ['lb-bug'],
 		});
 
@@ -821,18 +827,16 @@ describe('operation: create_task (real registry)', () => {
 		expect(resolver.resolveUser).toHaveBeenCalledWith('p-apollo', 'ann@example.com');
 		expect(resolver.resolveLabel).toHaveBeenCalledWith('p-apollo', 'bug');
 
-		// REAL contract: ownership is PER-STAGE — owner resolves to ONE
-		// stage_responsibilities entry on the create stage (stage of "In Review" =
-		// stg-doing). Labels are label_ids. NO top-level owner_id/reporter_id.
+		// REAL contract: ownership is FLAT — owner resolves to a top-level owner_id,
+		// with no stage anywhere. Labels are label_ids.
 		expect(createTask).toHaveBeenCalledWith('p-apollo', {
 			title: 'Wire auth',
 			status_id: 'st-review',
-			stage_responsibilities: [{ stage_id: 'stg-doing', owner_id: 'u-ann' }],
+			owner_id: 'u-ann',
 			label_ids: ['lb-bug'],
 		});
 		const body = createTask.mock.calls[0]![1] as Record<string, unknown>;
-		expect(body).not.toHaveProperty('owner_id');
-		expect(body).not.toHaveProperty('reporter_id');
+		expect(body).not.toHaveProperty('stage_responsibilities');
 		expect(body).not.toHaveProperty('custom_fields');
 
 		// ids out -> names: the detail hydrates, deriving stage from the status.
@@ -919,7 +923,7 @@ describe('operation: create_task (real registry)', () => {
 		expect(createTask).not.toHaveBeenCalled();
 	});
 
-	it('owner with NO status/stage still anchors the responsibility on the DEFAULT stage (never a stage-less entry)', async () => {
+	it('owner with NO status/stage is just a top-level owner_id (no stage is derived at all)', async () => {
 		const op = operationsByName.get('create_task')!;
 		const resolver = makeResolver();
 		const createTask = vi.fn(async () => ({
@@ -933,11 +937,11 @@ describe('operation: create_task (real registry)', () => {
 
 		await op.run({ project: 'apollo', title: 'X', owner: 'Bob Jones' }, ctx);
 
-		// No status/stage named -> the backend would default to the first status by
-		// position (Backlog, stage stg-todo). The responsibility entry MUST carry that
-		// stage_id; a stage-less entry would 422 (the r1 fix).
+		// No status/stage named -> the backend picks the default status itself, and
+		// ownership needs no stage to hang on, so the op resolves NOTHING extra.
 		const body = createTask.mock.calls[0]![1] as Record<string, unknown>;
-		expect(body.stage_responsibilities).toEqual([{ stage_id: 'stg-todo', owner_id: 'u-bob' }]);
+		expect(body.owner_id).toBe('u-bob');
+		expect(body).not.toHaveProperty('stage_responsibilities');
 		expect(body).not.toHaveProperty('status_id');
 	});
 
@@ -1195,7 +1199,12 @@ describe('operation: reply_to_comment (real registry)', () => {
 		expect(replyComment).toHaveBeenCalledWith('c-root', { content: 'ack' });
 		expect(out.id).toBe('c-new');
 		// hydrated: author id + stage id joined to names via the workflow.
-		expect(out.author).toEqual({ id: 'u-ann', display_name: 'Ann Smith' });
+		// a comment author is a person too — same stub, job_title included.
+		expect(out.author).toEqual({
+			id: 'u-ann',
+			display_name: 'Ann Smith',
+			job_title: 'Design Lead',
+		});
 		expect(out.stage).toEqual({ id: 'stg-doing', name: 'In Progress' });
 	});
 });
@@ -1247,16 +1256,16 @@ describe('operation: delete_task (real registry)', () => {
 	});
 });
 
-// --- update_task (real op, content PATCH + fan-out) -----------------------
+// --- update_task (real op, PATCH + label/field fan-out) --------------------
 //
-// REAL contract: the PATCH body is CONTENT ONLY (title/description/priority/…).
-// owner/reporter/labels/field_values do NOT ride along — they FAN OUT to the
-// dedicated endpoints (stage-responsibilities / labels / field-values). The op
-// re-fetches + hydrates the task at the end. (The If-Match read-first flow lives
-// inside the client's updateTask/deleteTask and is tested at the client level.)
+// REAL contract: the PATCH body carries the content fields AND owner_id/
+// reporter_id (an explicit null clears one). Only labels and field_values still
+// FAN OUT to their dedicated endpoints. The op re-fetches + hydrates the task at
+// the end. (The If-Match read-first flow lives inside the client's updateTask/
+// deleteTask and is tested at the client level.)
 
 describe('operation: update_task (real registry)', () => {
-	it('sends a CONTENT-ONLY PATCH and fans owner/labels/fields out to dedicated endpoints', async () => {
+	it('sends owner/reporter ON the PATCH and fans only labels/fields out to dedicated endpoints', async () => {
 		const op = operationsByName.get('update_task')!;
 		expect(op).toBeDefined();
 
@@ -1274,7 +1283,6 @@ describe('operation: update_task (real registry)', () => {
 		} as never);
 
 		const updateTask = vi.fn(async () => ({ id: TASK_UUID }));
-		const setStageResponsibilities = vi.fn(async () => ({}));
 		const addTaskLabel = vi.fn(async () => ({}));
 		const removeTaskLabel = vi.fn(async () => undefined);
 		const setFieldValues = vi.fn(async () => ({}));
@@ -1290,7 +1298,6 @@ describe('operation: update_task (real registry)', () => {
 		const client = {
 			getTask,
 			updateTask,
-			setStageResponsibilities,
 			addTaskLabel,
 			removeTaskLabel,
 			setFieldValues,
@@ -1309,21 +1316,19 @@ describe('operation: update_task (real registry)', () => {
 			ctx
 		)) as TaskDetail;
 
-		// 1) CONTENT-ONLY patch: only content keys, NO owner/labels/field_values.
+		// 1) ONE patch carries the content keys AND the resolved owner_id — no
+		// separate ownership write, so it is covered by the same If-Match.
 		expect(updateTask).toHaveBeenCalledWith(TASK_UUID, {
 			title: 'Renamed',
 			priority: 'high',
+			owner_id: 'u-ann',
 		});
 		const patch = updateTask.mock.calls[0]![1] as Record<string, unknown>;
-		expect(patch).not.toHaveProperty('owner_id');
 		expect(patch).not.toHaveProperty('add_label_ids');
 		expect(patch).not.toHaveProperty('field_values');
+		expect(patch).not.toHaveProperty('stage_id');
 
-		// 2) owner -> stage-responsibilities on the task's CURRENT stage (stg-doing).
-		expect(setStageResponsibilities).toHaveBeenCalledWith(TASK_UUID, {
-			responsibilities: [{ stage_id: 'stg-doing', owner_id: 'u-ann' }],
-		});
-		// labels -> POST /labels per resolved id.
+		// 2) labels -> POST /labels per resolved id.
 		expect(addTaskLabel).toHaveBeenCalledWith(TASK_UUID, 'lb-bug');
 		// custom_fields -> PATCH /field-values keyed by field UUID.
 		expect(setFieldValues).toHaveBeenCalledWith(TASK_UUID, {
@@ -1334,7 +1339,7 @@ describe('operation: update_task (real registry)', () => {
 		expect(out).toMatchObject({ key: 'APO-1', title: 'Renamed' });
 	});
 
-	it('surfaces WHICH sub-update failed (responsibilities) with its code', async () => {
+	it('surfaces WHICH sub-update failed (add_label) with its code', async () => {
 		const op = operationsByName.get('update_task')!;
 		const resolver = makeResolver();
 		const getTask = vi.fn(async (id: string) => ({
@@ -1343,19 +1348,42 @@ describe('operation: update_task (real registry)', () => {
 			project_id: 'p-apollo',
 			status_id: 'st-review',
 		}));
-		const setStageResponsibilities = vi.fn(async () => {
+		const addTaskLabel = vi.fn(async () => {
 			throw new McpError('permission_denied', 'nope');
 		});
-		const client = { getTask, setStageResponsibilities };
+		const client = { getTask, addTaskLabel };
 		const ctx = makeCtx(client, resolver);
 
 		const err = await op
-			.run({ task: TASK_UUID, owner: 'ann@example.com' }, ctx)
+			.run({ task: TASK_UUID, add_labels: ['bug'] }, ctx)
 			.then(() => undefined)
 			.catch((e) => e as McpError);
 		expect(err).toBeInstanceOf(McpError);
 		expect(err.code).toBe('permission_denied');
-		expect(err.message).toMatch(/responsibilities/);
+		expect(err.message).toMatch(/add_label/);
+	});
+
+	it('clears an owner with an explicit null (the null must SURVIVE onto the patch)', async () => {
+		const op = operationsByName.get('update_task')!;
+		const resolver = makeResolver();
+		const updateTask = vi.fn(async () => ({ id: TASK_UUID }));
+		const getTask = vi.fn(async (id: string) => ({
+			id,
+			key: 'APO-1',
+			project_id: 'p-apollo',
+			status_id: 'st-review',
+			updated_at: '2026-06-16T00:00:00Z',
+		}));
+		const ctx = makeCtx({ getTask, updateTask }, resolver);
+
+		await op.run({ task: TASK_UUID, owner: null, reporter: 'Bob Jones' }, ctx);
+
+		// null clears; it must not be dropped as "unset", and must not be resolved.
+		expect(updateTask).toHaveBeenCalledWith(TASK_UUID, {
+			owner_id: null,
+			reporter_id: 'u-bob',
+		});
+		expect(resolver.resolveUser).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -1403,12 +1431,13 @@ describe('operation: create_tasks_bulk (real registry)', () => {
 		// TOP-LEVEL project_id + template_id (resolved from the template name).
 		expect(body.project_id).toBe('p-apollo');
 		expect(body.template_id).toBe('tpl-default');
-		// per-row: per-stage responsibilities + label_ids + field_values shape.
+		// per-row: a flat owner_id (+ label_ids / field_values where given).
 		expect(body.tasks[0]).toMatchObject({
 			title: 'One',
 			status_id: 'st-review',
-			stage_responsibilities: [{ stage_id: 'stg-doing', owner_id: 'u-ann' }],
+			owner_id: 'u-ann',
 		});
+		expect(body.tasks[0]).not.toHaveProperty('stage_responsibilities');
 		// hydrated from `created`.
 		expect(out).toHaveLength(1);
 		expect(out[0]).toMatchObject({ key: 'APO-10', status: { name: 'In Review' } });
@@ -1427,9 +1456,9 @@ describe('operation: create_tasks_bulk (real registry)', () => {
 	});
 });
 
-// --- create_task: custom-field validation (r7) + assignments[] ---------------
+// --- create_task: custom-field validation (r7) + flat ownership --------------
 
-describe('create_task: field validation + assignments', () => {
+describe('create_task: field validation + ownership', () => {
 	it('rejects a value whose type mismatches the field_type (r7) before any client call', async () => {
 		const op = operationsByName.get('create_task')!;
 		const resolver = makeResolver();
@@ -1460,7 +1489,7 @@ describe('create_task: field validation + assignments', () => {
 		expect(createTask).not.toHaveBeenCalled();
 	});
 
-	it('builds per-stage stage_responsibilities from assignments[], merged by stage', async () => {
+	it('resolves owner AND reporter to top-level ids; rejects the removed assignments[] input', async () => {
 		const op = operationsByName.get('create_task')!;
 		const resolver = makeResolver();
 		const createTask = vi.fn(async () => ({
@@ -1477,23 +1506,220 @@ describe('create_task: field validation + assignments', () => {
 				project: 'apollo',
 				title: 'X',
 				status: 'In Review',
-				assignments: [
-					{ stage: 'To Do', owner: 'Ann Smith' },
-					{ stage: 'In Progress', reporter: 'Bob Jones' },
-				],
+				owner: 'Ann Smith',
+				reporter: 'Bob Jones',
 			},
 			ctx
 		);
 
-		const body = createTask.mock.calls[0]![1] as {
-			stage_responsibilities: Array<Record<string, unknown>>;
-		};
-		expect(body.stage_responsibilities).toEqual(
-			expect.arrayContaining([
-				{ stage_id: 'stg-todo', owner_id: 'u-ann' },
-				{ stage_id: 'stg-doing', reporter_id: 'u-bob' },
-			])
-		);
+		const body = createTask.mock.calls[0]![1] as Record<string, unknown>;
+		expect(body.owner_id).toBe('u-ann');
+		expect(body.reporter_id).toBe('u-bob');
+		expect(body).not.toHaveProperty('stage_responsibilities');
+
+		// `assignments` is gone from the schema, not silently ignored.
+		expect(op.input.shape).not.toHaveProperty('assignments');
+	});
+});
+
+// --- list_tasks: Owner / Reporter filters (never "assignee") ----------------
+
+describe('list_tasks: owner/reporter filters', () => {
+	it('resolves --owner and --reporter to owner_id/reporter_id, and has no assignee input', async () => {
+		const op = operationsByName.get('list_tasks')!;
+		const resolver = makeResolver();
+		const listTasks = vi.fn(async () => ({ data: [], cursor: null }));
+		const ctx = makeCtx({ listTasks }, resolver);
+
+		await op.run({ project: 'apollo', owner: 'ann@example.com', reporter: 'Bob Jones' }, ctx);
+
+		expect(listTasks.mock.calls[0]![1]).toMatchObject({
+			owner_id: 'u-ann',
+			reporter_id: 'u-bob',
+		});
+		// the product says Owner and Reporter; "assignee" is gone from the surface.
+		expect(op.input.shape).not.toHaveProperty('assignee');
+		expect(op.input.shape).toHaveProperty('owner');
+		expect(op.input.shape).toHaveProperty('reporter');
+	});
+
+	it('labels a hydrated owner with the job_title the workflow already knows', async () => {
+		const op = operationsByName.get('get_task')!;
+		const resolver = makeResolver();
+		// A LEAN row (no ?expand): only owner_id. The job_title still lands, because
+		// the cached workflow's member rows carry it.
+		const getTask = vi.fn(async () => ({
+			id: 't1',
+			key: 'APO-1',
+			project_id: 'p-apollo',
+			status_id: 'st-review',
+			owner_id: 'u-ann',
+			reporter_id: 'u-bob',
+			updated_at: '2026-06-16T00:00:00Z',
+		}));
+		const out = (await op.run(
+			{ task: '33333333-3333-3333-3333-333333333333' },
+			makeCtx({ getTask }, resolver)
+		)) as TaskDetail;
+
+		expect(out.owner).toMatchObject({ display_name: 'Ann Smith', job_title: 'Design Lead' });
+		// no title known -> the key is simply absent, not an empty string.
+		expect(out.reporter).toMatchObject({ display_name: 'Bob Jones' });
+		expect(out.reporter).not.toHaveProperty('job_title');
+	});
+
+	it('keeps the expanded stub profile fields when the server sends them', async () => {
+		const op = operationsByName.get('get_task')!;
+		const resolver = makeResolver();
+		const getTask = vi.fn(async () => ({
+			id: 't1',
+			key: 'APO-1',
+			project_id: 'p-apollo',
+			status_id: 'st-review',
+			owner: {
+				id: 'u-ann',
+				display_name: 'Ann Smith',
+				first_name: 'Ann',
+				last_name: 'Smith',
+				avatar_url: 'https://example.test/a.png',
+				job_title: 'Staff Designer',
+			},
+			updated_at: '2026-06-16T00:00:00Z',
+		}));
+		const out = (await op.run(
+			{ task: '33333333-3333-3333-3333-333333333333', expand: true },
+			makeCtx({ getTask }, resolver)
+		)) as TaskDetail;
+
+		// the ref lookup reads the task lean; the expand ride-along is the 2nd call.
+		expect(getTask).toHaveBeenLastCalledWith('t1', 'owner,reporter,labels');
+		// the expanded row wins over the workflow's copy.
+		expect(out.owner).toMatchObject({
+			first_name: 'Ann',
+			last_name: 'Smith',
+			avatar_url: 'https://example.test/a.png',
+			job_title: 'Staff Designer',
+		});
+	});
+});
+
+// --- get_task_timeline (real op) -------------------------------------------
+
+describe('operation: get_task_timeline (real registry)', () => {
+	const TASK_UUID = '22222222-2222-2222-2222-222222222222';
+	const taskRow = { id: TASK_UUID, project_id: 'p-apollo', key: 'APO-1', status_id: 'st-review' };
+
+	it('resolves the task ref, passes limit/cursor/event_type, and hydrates the actor', async () => {
+		const op = operationsByName.get('get_task_timeline')!;
+		expect(op).toBeDefined();
+
+		const resolver = makeResolver();
+		const getTask = vi.fn(async () => taskRow);
+		const getTaskTimeline = vi.fn(async () => ({
+			data: [
+				{
+					id: 'ev-1',
+					task_id: TASK_UUID,
+					event_type: 'owner_changed',
+					actor_id: 'u-ann',
+					old_value: null,
+					new_value: 'u-bob',
+					data: { task_id: TASK_UUID },
+					created_at: '2026-06-16T00:00:00Z',
+				},
+			],
+			cursor: 'CUR-2',
+		}));
+		const ctx = makeCtx({ getTask, getTaskTimeline }, resolver);
+
+		const page = (await op.run(
+			{ task: TASK_UUID, event_type: 'owner_changed', limit: 10 },
+			ctx
+		)) as { items: Record<string, unknown>[]; next_cursor: string | null; has_more: boolean };
+
+		expect(getTaskTimeline).toHaveBeenCalledWith(TASK_UUID, {
+			limit: 10,
+			cursor: undefined,
+			event_type: 'owner_changed',
+		});
+
+		// the actor is joined to a name, and so are the values of the event types whose
+		// shape we KNOW is a bare user uuid (owner_changed / reporter_changed) — a raw
+		// uuid in a history line is unreadable. null stays null.
+		expect(page.items[0]).toMatchObject({
+			id: 'ev-1',
+			event_type: 'owner_changed',
+			actor: { id: 'u-ann', display_name: 'Ann Smith' },
+			old_value: null,
+			new_value: { id: 'u-bob', display_name: 'Bob Jones' },
+		});
+
+		// pagination surfaced, never truncated (r8).
+		expect(page.next_cursor).toBe('CUR-2');
+		expect(page.has_more).toBe(true);
+	});
+
+	it('defaults the limit to 50 and tolerates a system event with no actor', async () => {
+		const op = operationsByName.get('get_task_timeline')!;
+		const resolver = makeResolver();
+		const getTask = vi.fn(async () => taskRow);
+		const getTaskTimeline = vi.fn(async () => ({
+			data: [{ id: 'ev-2', event_type: 'created', data: { task_id: TASK_UUID } }],
+			cursor: null,
+		}));
+		const page = (await op.run(
+			{ task: TASK_UUID },
+			makeCtx({ getTask, getTaskTimeline }, resolver)
+		)) as { items: Record<string, unknown>[]; has_more: boolean };
+
+		expect(getTaskTimeline.mock.calls[0]![1]).toMatchObject({ limit: 50 });
+		expect(page.items[0]).toMatchObject({ id: 'ev-2', actor: null, task_id: TASK_UUID });
+		expect(page.has_more).toBe(false);
+	});
+
+	it('is a read: it carries no destructive flag', () => {
+		const op = operationsByName.get('get_task_timeline')!;
+		expect(op.meta?.destructive).toBeFalsy();
+		expect(op.meta?.cli).toMatchObject({ group: 'task', verb: 'timeline' });
+	});
+
+	it('leaves an unknown event kind, and an unknown user, exactly as the server sent it', async () => {
+		const op = operationsByName.get('get_task_timeline')!;
+		const getTask = vi.fn(async () => taskRow);
+		const getTaskTimeline = vi.fn(async () => ({
+			data: [
+				// A kind this client has never heard of: the values are NOT ours to
+				// interpret, and it must not crash.
+				{
+					id: 'ev-3',
+					event_type: 'sprint_rolled_over',
+					old_value: { sprint: 7 },
+					new_value: [1, 2, 3],
+					data: { task_id: TASK_UUID },
+				},
+				// A known kind, but a user the cached workflow has never seen: the raw
+				// uuid survives rather than collapsing to a blank name.
+				{
+					id: 'ev-4',
+					event_type: 'reporter_changed',
+					old_value: 'u-stranger',
+					new_value: null,
+					data: { task_id: TASK_UUID },
+				},
+			],
+			cursor: null,
+		}));
+		const page = (await op.run(
+			{ task: TASK_UUID },
+			makeCtx({ getTask, getTaskTimeline }, makeResolver())
+		)) as { items: Record<string, unknown>[] };
+
+		expect(page.items[0]).toMatchObject({
+			event_type: 'sprint_rolled_over',
+			old_value: { sprint: 7 },
+			new_value: [1, 2, 3],
+		});
+		expect(page.items[1]).toMatchObject({ old_value: 'u-stranger', new_value: null });
 	});
 });
 
