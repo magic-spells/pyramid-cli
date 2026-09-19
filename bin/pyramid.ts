@@ -10,7 +10,7 @@
 //   - "mcp"    -> start the stdio MCP server (createMcpServer + StdioServerTransport)
 //                 with SIGINT/SIGTERM/stdin-close graceful shutdown.
 //   - "doctor" -> run FLOW-STARTUP-AUTH (getMe + listProjects + first-project
-//                 workflow ping); print user/workspace/projects; exit by outcome.
+//                 workflow ping); print user/org/projects; exit by outcome.
 //   - anything else (incl. no subcommand) -> hand off to the CLI: lazily import
 //                 and `await runCli(argv)`, which loads its own config (layering
 //                 --base-url / --project over env), runs the operation, renders
@@ -197,21 +197,21 @@ async function runDoctor(config: PyramidConfig, argv: string[]): Promise<void> {
 
 	try {
 		// getMe + listProjects in parallel; either can throw a mapped McpError (e.g.
-		// 401 -> auth_invalid/auth_expired). listWorkspaces gives the key's pinned
-		// workspace when getMe doesn't embed one; tolerate its absence.
-		const [me, projects, workspaces] = await Promise.all([
+		// 401 -> auth_invalid/auth_expired). listOrganizations gives the key's pinned
+		// org when getMe doesn't embed one; tolerate its absence.
+		const [me, projects, organizations] = await Promise.all([
 			ctx.client.getMe(),
 			ctx.client.listProjects(),
-			ctx.client.listWorkspaces().catch(() => [] as unknown[]),
+			ctx.client.listOrganizations().catch(() => [] as unknown[]),
 		]);
 
 		const userName = readStr(me, 'display_name') ?? readStr(me, 'email') ?? '(unknown user)';
 		const userEmail = readStr(me, 'email') ?? '';
 
-		// Workspace: prefer one embedded on the user payload, else the pinned
-		// workspace (the first/only entry from listWorkspaces).
-		const wsRaw = readField(me, 'workspace') ?? workspaces[0];
-		const wsName = readStr(wsRaw, 'name') ?? readStr(wsRaw, 'slug') ?? '(workspace)';
+		// Org: prefer one embedded on the user payload, else the pinned
+		// org (the first/only entry from listOrganizations).
+		const orgRaw = readField(me, 'organization') ?? organizations[0];
+		const orgName = readStr(orgRaw, 'name') ?? readStr(orgRaw, 'slug') ?? '(org)';
 
 		const projectNames = projects
 			.map((p) => readStr(p, 'name') ?? readStr(p, 'slug'))
@@ -235,7 +235,7 @@ async function runDoctor(config: PyramidConfig, argv: string[]): Promise<void> {
 		// Human summary -> stderr (never stdout).
 		const userLine = userEmail ? `${userName} <${userEmail}>` : userName;
 		err2line(
-			`Authenticated as ${userLine} · workspace ${wsName} · ` +
+			`Authenticated as ${userLine} · org ${orgName} · ` +
 				`${projectNames.length} project${projectNames.length === 1 ? '' : 's'}` +
 				(projectNames.length ? `: ${projectNames.join(', ')}` : '')
 		);
@@ -248,7 +248,7 @@ async function runDoctor(config: PyramidConfig, argv: string[]): Promise<void> {
 			const payload = {
 				ok: true,
 				user: { name: userName, email: userEmail || null },
-				workspace: { name: wsName },
+				organization: { name: orgName },
 				projects: projectNames,
 				workflow: workflowOk === undefined ? null : { ok: workflowOk },
 			};

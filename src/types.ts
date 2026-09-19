@@ -167,7 +167,7 @@ export interface TimelineEvent {
 
 export interface WhoAmI {
 	user: { id: string; display_name: string; email: string };
-	workspace: { id: string; slug: string; name: string; role: 'owner' | 'admin' | 'member' };
+	organization: { id: string; slug: string; name: string; role: 'owner' | 'admin' | 'member' };
 	projects: ProjectSummary[];
 }
 

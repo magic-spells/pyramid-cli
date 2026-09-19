@@ -88,7 +88,7 @@ The server exposes **16 tools**. Every tool takes human **names/keys** as input 
 
 | Tool | What it does |
 |---|---|
-| `whoami` | The authenticated user, their workspace, and the projects they can access. |
+| `whoami` | The authenticated user, their org, and the projects they can access. |
 | `list_projects` | Every project accessible to you. |
 | `get_project_workflow` | A project's stages, statuses, labels, members, and custom-field templates — the vocabulary every other call resolves names against. |
 
@@ -100,7 +100,7 @@ The server exposes **16 tools**. Every tool takes human **names/keys** as input 
 | `list_tasks` | A project's tasks, filtered by `status` / `stage` / `owner` / `reporter` / `label` / `query`, or `archived` for the archive. Paginated. |
 | `get_task` | One task's full detail by key (`WEB-42`) or UUID; `expand` inlines owner/reporter/labels. |
 | `get_task_timeline` | A task's history — who changed what, when — oldest first. Narrow with `event_type` (e.g. `owner_changed`). Paginated. |
-| `search_tasks` | Full-text search across the workspace by title/key/content. |
+| `search_tasks` | Full-text search across the org by title/key/content. |
 
 **Tasks — write**
 

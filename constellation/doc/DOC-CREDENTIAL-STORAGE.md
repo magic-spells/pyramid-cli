@@ -8,7 +8,7 @@ connections:
   - FILE-AUTH-COMMANDS
   - FILE-BIN
   - DATATYPE-MCP-CONFIG
-  - DOC-AUTH-WORKSPACE
+  - DOC-AUTH-ORGANIZATION
   - FLOW-CREDENTIAL-RESOLUTION
   - FLOW-CLI-BROWSER-LOGIN
   - PLAN-V2-ROADMAP
@@ -17,7 +17,7 @@ connections:
 
 # Decision — store the API key in the OS keychain
 
-**Context.** A `pyk_` key is password-equivalent ([[DOC-AUTH-WORKSPACE]]). Plain env storage is still supported for CI/headless MCP clients, but local users should not have to keep the key in a readable shell profile or MCP config dotfile.
+**Context.** A `pyk_` key is password-equivalent ([[DOC-AUTH-ORGANIZATION]]). Plain env storage is still supported for CI/headless MCP clients, but local users should not have to keep the key in a readable shell profile or MCP config dotfile.
 
 **Decision.** OS-keychain storage is the preferred local at-rest location, while `env` remains the explicit override. Startup resolution order ([[FLOW-CREDENTIAL-RESOLUTION]], [[FILE-CONFIG]]):
 

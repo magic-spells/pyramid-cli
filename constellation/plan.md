@@ -31,9 +31,10 @@ This plan owns the MCP/CLI package design itself; the server-side backend contra
 
 ## Source of truth
 
+
 The **Pyramid HTTP contract is fixed and external** — owned by `pyramid-server` ([[EXTERNAL-PYRAMID-API]]). This package adapts to that contract; it does not drive backend behavior. When building a tool, read the real endpoint shape from the server plan via the `repo:` selector (`repo: "pyramid-server"`) rather than guessing.
 
-Auth is settled and shipped ([[DOC-AUTH-WORKSPACE]]): a `pyk_` key is pinned to one workspace and inherits exactly its owner's access.
+Auth is settled and shipped ([[DOC-AUTH-ORGANIZATION]]): a `pyk_` key is pinned to one organization and inherits exactly its owner's access.
 
 ## Stack & distribution
 
