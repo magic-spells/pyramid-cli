@@ -9,7 +9,7 @@ connections:
   - FILE-CONFIG
   - DATATYPE-MCP-CONFIG
   - EXTERNAL-PYRAMID-API
-  - DOC-AUTH-ORGANIZATION
+  - DOC-AUTH-WORKSPACE
   - FLOW-CREDENTIAL-RESOLUTION
   - FILE-AUTH-COMMANDS
   - FILE-VERSION
@@ -25,5 +25,5 @@ connections:
 3. CLI commands other than `mcp` / `doctor` hand off to [[FILE-CLI]], which parses globals, loads config, invokes the operation registry, and renders output.
 4. `pyramid mcp` and `pyramid doctor` load [[DATATYPE-MCP-CONFIG]] through [[FILE-CONFIG]]. Credential resolution is `PYRAMID_API_KEY` env -> OS keychain -> clear error ([[FLOW-CREDENTIAL-RESOLUTION]]).
 5. `pyramid mcp` constructs [[FILE-SERVER]] with a `PyramidClient` (bearer `pyk_...`) and `Resolver`, then connects `StdioServerTransport`; SIGINT/SIGTERM/stdin-close shut down cleanly.
-6. `pyramid doctor` calls `getMe`, `listProjects`, `listOrganizations`, and a first-project workflow ping against [[EXTERNAL-PYRAMID-API]], prints user/org/projects, and exits by outcome. `listOrganizations` (`GET /v1/organizations`) is best-effort — its failure degrades the org line rather than the command.
-   - 401 -> print `auth_invalid` / `auth_expired` guidance from [[DOC-AUTH-ORGANIZATION]], exit non-zero.
+6. `pyramid doctor` calls `getMe`, `listProjects`, `listWorkspaces`, and a first-project workflow ping against [[EXTERNAL-PYRAMID-API]], prints user/workspace/projects, and exits by outcome. `listWorkspaces` (`GET /v1/workspaces`) is best-effort — its failure degrades the workspace line rather than the command.
+   - 401 -> print `auth_invalid` / `auth_expired` guidance from [[DOC-AUTH-WORKSPACE]], exit non-zero.

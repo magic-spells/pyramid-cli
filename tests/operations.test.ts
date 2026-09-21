@@ -284,7 +284,7 @@ describe('operation: list_my_tasks (real registry)', () => {
 });
 
 describe('operation: whoami (real registry)', () => {
-	it('assembles user + pinned org + projects from three client calls', async () => {
+	it('assembles user + pinned workspace + projects from three client calls', async () => {
 		const op = operationsByName.get('whoami')!;
 		const client = {
 			getMe: vi.fn(async () => ({
@@ -295,15 +295,15 @@ describe('operation: whoami (real registry)', () => {
 			listProjects: vi.fn(async () => [
 				{ id: 'p-apollo', slug: 'apollo', name: 'Apollo', task_prefix: 'APO', role: 'admin' },
 			]),
-			listOrganizations: vi.fn(async () => [
-				{ id: 'org-1', slug: 'acme', name: 'Acme', role: 'owner' },
+			listWorkspaces: vi.fn(async () => [
+				{ id: 'workspace-1', handle: 'acme', name: 'Acme', role: 'owner' },
 			]),
 		};
 		const resolver = makeResolver();
 
 		const out = (await op.run({}, makeCtx(client, resolver))) as WhoAmI;
 		expect(out.user).toMatchObject({ id: 'u-ann', email: 'ann@example.com' });
-		expect(out.organization).toMatchObject({ id: 'org-1', slug: 'acme', role: 'owner' });
+		expect(out.workspace).toMatchObject({ id: 'workspace-1', handle: 'acme', role: 'owner' });
 		expect(out.projects).toHaveLength(1);
 		expect(out.projects[0]!.slug).toBe('apollo');
 	});

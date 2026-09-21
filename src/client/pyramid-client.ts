@@ -14,9 +14,9 @@
 //   - GET /v1/me            -> a raw User object (model.User from handlers/user.go GetMe):
 //                              { id, account_user_id, email, email_verified,
 //                                display_name, first_name, last_name, avatar_url,
-//                                timezone, locale, ... }. NO embedded org,
+//                                timezone, locale, ... }. NO embedded workspace,
 //                              NO project list — assembling WhoAmI is the op layer's job.
-//   - GET /v1/organizations -> { "data": Organization[] }  (no cursor) (handlers/organization.go).
+//   - GET /v1/workspaces    -> { "data": Workspace[] }  (no cursor) (handlers/workspace.go).
 //   - GET /v1/projects      -> { "data": Project[], "cursor": string|null }
 //                              (handlers/project.go list). Raw projects carry
 //                              `task_prefix`, `archived_at`, etc.
@@ -73,7 +73,7 @@ export class PyramidClient {
 
 	/**
 	 * GET /v1/me — the authenticated user (raw `model.User`). The payload may carry
-	 * an organization in a future revision, so callers read it defensively; today it is
+	 * a workspace in a future revision, so callers read it defensively; today it is
 	 * just the user record. Returned raw.
 	 */
 	getMe(): Promise<unknown> {
@@ -81,13 +81,13 @@ export class PyramidClient {
 	}
 
 	/**
-	 * GET /v1/organizations — the caller's organizations. The API key is org-pinned,
+	 * GET /v1/workspaces — the caller's workspaces. The API key is workspace-pinned,
 	 * so this is effectively a single-element list (the op layer takes `[0]` as the
-	 * pinned org). Server shape is `{ data: Organization[] }`; we unwrap to the
+	 * pinned workspace). Server shape is `{ data: Workspace[] }`; we unwrap to the
 	 * array and tolerate a bare array.
 	 */
-	listOrganizations(): Promise<unknown[]> {
-		return this.request<unknown>('GET', '/v1/organizations').then(unwrapData);
+	listWorkspaces(): Promise<unknown[]> {
+		return this.request<unknown>('GET', '/v1/workspaces').then(unwrapData);
 	}
 
 	/**
@@ -271,7 +271,7 @@ export class PyramidClient {
 	}
 
 	/**
-	 * GET /v1/search/tasks — full-text task search across the org. Returns the
+	 * GET /v1/search/tasks — full-text task search across the workspace. Returns the
 	 * raw `{ data }` envelope (no cursor per DOC-BACKEND-CONTRACT; normalized to a
 	 * null cursor). `q` is the query; the optional filters are already-resolved user
 	 * UUIDs.
