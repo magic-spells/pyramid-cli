@@ -3,13 +3,13 @@
 	"version": "0.1.1",
 	"description": "MCP server + CLI for the Pyramid project-management API.",
 	"license": "MIT",
-	"homepage": "https://github.com/magic-spells/pyramid#readme",
+	"homepage": "https://github.com/magic-spells/pyramid-cli#readme",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/magic-spells/pyramid.git"
+		"url": "git+https://github.com/magic-spells/pyramid-cli.git"
 	},
 	"bugs": {
-		"url": "https://github.com/magic-spells/pyramid/issues"
+		"url": "https://github.com/magic-spells/pyramid-cli/issues"
 	},
 	"keywords": [
 		"mcp",
