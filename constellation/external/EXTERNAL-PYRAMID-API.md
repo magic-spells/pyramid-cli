@@ -2,7 +2,7 @@
 name: Pyramid HTTP API
 kind: external-microservice
 status: built
-vendor: Pyramid (pyramid-server)
+vendor: Pyramid (the `pyramid` repo, `server/`)
 purpose: The upstream project-management API the MCP drives, as the key's user.
 docs_url: https://github.com/magic-spells/pyramid
 credentials_envs:
@@ -12,7 +12,7 @@ connections:
   - DOC-ERROR-MODEL
 ---
 
-The upstream Pyramid HTTP API — the fixed boundary this package adapts to. Owned by `pyramid-server` (Go); this MCP/CLI package never changes it. Read exact endpoint shapes from that repo's plan (`repo: "pyramid-server"`, its `API-*` / `DATATYPE-*` cards) when wiring a tool.
+The upstream Pyramid HTTP API — the fixed boundary this package adapts to. Owned by the `pyramid` repo, in its `server/` Go module; this MCP/CLI package never changes it. Read exact endpoint shapes from that repo's plan via the `repo:` selector (`repo: "pyramid"`, its `API-*` / `DATATYPE-*` cards) when wiring a tool.
 
 - **Base URL:** `PYRAMID_BASE_URL` (`https://api.pyramid.magicspells.io` prod / `http://localhost:8080` dev). Versioned resources under **`/v1`**.
 - **Auth:** `Authorization: Bearer pyk_<prefix>_<secret>` on every call; CSRF-exempt header auth. See [[DOC-AUTH-WORKSPACE]].

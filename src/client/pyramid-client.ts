@@ -9,7 +9,7 @@
 //
 // The API key is attached as a header only; it is NEVER logged or placed in a URL.
 //
-// Ground truth, confirmed against ../pyramid-server/app (Go handlers + models):
+// Ground truth, confirmed against the `pyramid` repo's server/ (Go handlers + models):
 //   - All routes are mounted under `/v1` (internal/router/router.go: r.Route("/v1", ...)).
 //   - GET /v1/me            -> a raw User object (model.User from handlers/user.go GetMe):
 //                              { id, account_user_id, email, email_verified,

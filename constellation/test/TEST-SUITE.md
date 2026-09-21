@@ -22,7 +22,7 @@ connections:
   separation, usage errors, and exit-code mapping.
 - **Package checks** — `npm run build`, `npm test`, and `npm pack --dry-run` before publish.
 
-Still not verified live: an integration smoke against a real/local `pyramid-server` with a test
+Still not verified live: an integration smoke against a real/local Pyramid server with a test
 `pyk_` key: list projects, list my tasks, create/move through a real workflow, comment + mention,
 reply, archive/unarchive, and `doctor`.
 

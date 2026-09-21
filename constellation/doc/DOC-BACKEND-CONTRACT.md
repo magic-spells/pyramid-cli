@@ -1,5 +1,5 @@
 ---
-name: Real pyramid-server HTTP contract (audited)
+name: Real Pyramid server HTTP contract (audited)
 kind: reference
 status: built
 connections:
@@ -11,7 +11,7 @@ connections:
 notes:
   - kind: decision
     text: >-
-      2026-09-18 — Per-stage ownership is gone. pyramid-server PR #24 removed `GET/PATCH
+      2026-09-18 — Per-stage ownership is gone. Pyramid server PR #24 removed `GET/PATCH
       /tasks/{id}/stage-responsibilities` and `stage_responsibilities` from task create/bulk and the
       task bundle, replacing them with top-level nullable `owner_id`/`reporter_id` on create, bulk
       and PATCH. It also shipped `GET /tasks/{id}/timeline` and `job_title` on workspace-member
@@ -21,9 +21,9 @@ notes:
       the shim would only 404.
 ---
 
-# Real pyramid-server HTTP contract (audited)
+# Real Pyramid server HTTP contract (audited)
 
-Ground truth read directly from the Go source (`../pyramid-server`, `app/internal/{router,handlers,service,model}`), not inferred from the plan. This supersedes earlier
+Ground truth read directly from the Go source (the `pyramid` repo, `server/internal/{router,handlers,service,model}`), not inferred from the plan. This supersedes earlier
 guesses where they differ. All routes are under `/v1`, bearer `pyk_…`, key pinned to one
 workspace (`X-Workspace-*` ignored for keys).
 

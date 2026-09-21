@@ -18,7 +18,7 @@ notes:
 
 # Auth & workspace model (the rule that shapes the tool surface)
 
-Settled and shipped server-side ([[EXTERNAL-PYRAMID-API]]; `pyramid-server` `FLOW-APIKEY-AUTH`).
+Settled and shipped server-side ([[EXTERNAL-PYRAMID-API]]; the `pyramid` repo's `server/`, `FLOW-APIKEY-AUTH`).
 The MCP must honor it:
 
 - A `pyk_<prefix>_<secret>` key resolves to exactly **one user** (the security boundary) and
@@ -32,6 +32,6 @@ The MCP must honor it:
   project roles, and guest-visibility limits all apply unchanged. No super-keys.
 - **Key management is browser-only.** `GET/POST/DELETE/regenerate /v1/api-keys` reject
   API-key auth (403), so this MCP can never mint or revoke keys. Keys are created in
-  `pyramid-web` → Settings → API Keys ([[DOC-ONBOARDING]]).
+  the web client (the `pyramid` repo, `web/`) → Settings → API Keys ([[DOC-ONBOARDING]]).
 - A revoked / expired / unknown key → **401**. The client surfaces `auth_invalid` /
   `auth_expired` with a hint to regenerate ([[DATATYPE-MCP-ERROR]]).

@@ -26,7 +26,7 @@ For dev/staging, target a different web app with `PYRAMID_WEB_URL` or `--web-url
 PYRAMID_WEB_URL=http://localhost:5173 npx -y @magic-spells/pyramid login
 ```
 
-2. Manual fallback: open Pyramid (`pyramid-web`) -> **Settings -> API Keys** -> "Generate new key", copy the one-time `pyk_<prefix>_<secret>`, then store it with:
+2. Manual fallback: open Pyramid (the web client, served from the `pyramid` repo's `web/`) -> **Settings -> API Keys** -> "Generate new key", copy the one-time `pyk_<prefix>_<secret>`, then store it with:
 
 ```sh
 npx -y @magic-spells/pyramid set-key pyk_...
