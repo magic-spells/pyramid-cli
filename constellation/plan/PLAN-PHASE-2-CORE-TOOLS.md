@@ -17,7 +17,7 @@ The high-value verbs that satisfy the motivating prompts ("what do I own in MOGO
   [[API-TOOL-UPDATE-TASK]], [[API-TOOL-MOVE-TASK]], [[API-TOOL-ARCHIVE-TASK]].
 - Comments: [[API-TOOL-ADD-COMMENT]], [[API-TOOL-REPLY-COMMENT]], `list_comments`
   ([[DOC-TOOLS-COMMENTS]]).
-- Resources: `pyramid://me`, `pyramid://projects`, `pyramid://projects/{slug}/workflow`
+- Resources: `pyramid://me`, `pyramid://projects`, `pyramid://projects/{handle}/workflow`
   ([[FILE-RESOURCES]]).
 
 Built and covered by unit tests for the registry/client/resolver/CLI. A live Claude Code smoke

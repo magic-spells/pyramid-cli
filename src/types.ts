@@ -37,7 +37,7 @@ export type McpErrorCode =
 
 export interface ProjectSummary {
 	id: string;
-	slug: string;
+	handle: string;
 	name: string;
 	task_prefix: string;
 	role: 'admin' | 'pm' | 'member' | 'viewer' | 'guest';

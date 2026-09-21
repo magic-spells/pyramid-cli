@@ -7,7 +7,7 @@ connections:
 ---
 
 The cached per-project schema behind `get_project_workflow` and the
-`pyramid://projects/{slug}/workflow` resource — the in-memory shape the resolver uses to turn
+`pyramid://projects/{handle}/workflow` resource — the in-memory shape the resolver uses to turn
 names into UUIDs ([[DOC-NAME-RESOLUTION]]); cached 60s.
 
 **Assembled from multiple backend endpoints** (the real `/workflow` returns *only* stages +

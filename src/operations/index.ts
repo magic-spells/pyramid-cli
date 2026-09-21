@@ -102,7 +102,7 @@ function toProjectSummary(raw: unknown): ProjectSummary {
 	const p = rec(raw);
 	return {
 		id: readStr(p.id) ?? '',
-		slug: readStr(p.slug) ?? '',
+		handle: readStr(p.handle) ?? '',
 		name: readStr(p.name) ?? '',
 		task_prefix: readStr(p.task_prefix) ?? '',
 		role: projectRole(p.role),
@@ -242,7 +242,7 @@ const listMyTasks: Operation<ListMyTasksInput, Page<TaskSummary>> = {
 
 /** A neutral workflow used when a task row carries no resolvable project_id. */
 const EMPTY_WORKFLOW: Workflow = {
-	project: { id: '', slug: '', name: '', task_prefix: '', role: 'member', archived: false },
+	project: { id: '', handle: '', name: '', task_prefix: '', role: 'member', archived: false },
 	stages: [],
 	statuses: [],
 	labels: [],

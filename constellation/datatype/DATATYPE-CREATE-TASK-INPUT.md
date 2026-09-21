@@ -13,7 +13,7 @@ Input for [[API-TOOL-CREATE-TASK]]. All references are **names**, resolved to UU
 
 ```ts
 interface CreateTaskInput {
-  project: string;            // slug / name / fuzzy
+  project: string;            // handle / name / fuzzy
   title: string;              // the ONLY required field
   description?: string;
   status?: string;            // name/key/category — drives placement (carries the stage)

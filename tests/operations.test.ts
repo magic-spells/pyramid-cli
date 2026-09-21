@@ -43,7 +43,7 @@ const CONFIG_DESTRUCTIVE: PyramidConfig = { ...CONFIG_SAFE, allowDestructive: tr
 const APOLLO_WORKFLOW: Workflow = {
 	project: {
 		id: 'p-apollo',
-		slug: 'apollo',
+		handle: 'apollo',
 		name: 'Apollo',
 		task_prefix: 'APO',
 		role: 'admin',
@@ -166,10 +166,10 @@ describe('operation: list_projects (real registry)', () => {
 
 		const client = {
 			listProjects: vi.fn(async () => [
-				{ id: 'p1', slug: 'apollo', name: 'Apollo', task_prefix: 'APO', role: 'admin' },
+				{ id: 'p1', handle: 'apollo', name: 'Apollo', task_prefix: 'APO', role: 'admin' },
 				{
 					id: 'p2',
-					slug: 'gemini',
+					handle: 'gemini',
 					name: 'Gemini',
 					task_prefix: 'GEM',
 					role: 'member',
@@ -293,7 +293,7 @@ describe('operation: whoami (real registry)', () => {
 				email: 'ann@example.com',
 			})),
 			listProjects: vi.fn(async () => [
-				{ id: 'p-apollo', slug: 'apollo', name: 'Apollo', task_prefix: 'APO', role: 'admin' },
+				{ id: 'p-apollo', handle: 'apollo', name: 'Apollo', task_prefix: 'APO', role: 'admin' },
 			]),
 			listWorkspaces: vi.fn(async () => [
 				{ id: 'workspace-1', handle: 'acme', name: 'Acme', role: 'owner' },
@@ -305,7 +305,7 @@ describe('operation: whoami (real registry)', () => {
 		expect(out.user).toMatchObject({ id: 'u-ann', email: 'ann@example.com' });
 		expect(out.workspace).toMatchObject({ id: 'workspace-1', handle: 'acme', role: 'owner' });
 		expect(out.projects).toHaveLength(1);
-		expect(out.projects[0]!.slug).toBe('apollo');
+		expect(out.projects[0]!.handle).toBe('apollo');
 	});
 });
 

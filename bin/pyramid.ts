@@ -215,7 +215,7 @@ async function runDoctor(config: PyramidConfig, argv: string[]): Promise<void> {
 			readStr(workspaceRaw, 'name') ?? readStr(workspaceRaw, 'handle') ?? '(workspace)';
 
 		const projectNames = projects
-			.map((p) => readStr(p, 'name') ?? readStr(p, 'slug'))
+			.map((p) => readStr(p, 'name') ?? readStr(p, 'handle'))
 			.filter((n): n is string => typeof n === 'string');
 
 		// Ping the first project's workflow endpoint to confirm it responds. A
