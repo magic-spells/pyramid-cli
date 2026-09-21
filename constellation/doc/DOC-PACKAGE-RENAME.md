@@ -12,7 +12,7 @@ connections:
 
 # Decision — one package `@magic-spells/pyramid`, one `pyramid` bin
 
-**Context.** The package ships two surfaces over one core — the MCP server and the CLI ([[DOC-CLI]]). It is also the only public package in the Pyramid ecosystem (`pyramid-server`, `pyramid-web` stay private), so the bare scoped name is free and idiomatic for the public client/toolkit.
+**Context.** The package ships two surfaces over one core — the MCP server and the CLI ([[DOC-CLI]]). It is also the only public package in the Pyramid ecosystem (the `pyramid` product repo stays private), so the bare scoped name is free and idiomatic for the public client/toolkit.
 
 **Implemented decision:**
 
@@ -21,7 +21,7 @@ connections:
 - **Dispatch:** `pyramid mcp` -> stdio MCP server; `pyramid doctor` -> setup check; `pyramid version` -> package version; local credential commands run before config load; anything else -> CLI.
 - **MCP client config:** `command: "npx", args: ["-y", "@magic-spells/pyramid", "mcp"]`.
 - **Env var:** destructive gate is `PYRAMID_ALLOW_DESTRUCTIVE`; `PYRAMID_API_KEY` and `PYRAMID_BASE_URL` keep their names.
-- **Repo:** the on-disk repo is `pyramid/`; `pyramid-server/` and `pyramid-web/` are connected sibling repos.
+- **Repo:** the on-disk repo is `pyramid-cli/`; the merged `pyramid/` product repo (`server/` + `web/`) is the connected sibling repo.
 
 **Why.** One install, one version, one test suite, and a guaranteed-shared core. A future programmatic SDK is a library export from this same package, not another package name.
 

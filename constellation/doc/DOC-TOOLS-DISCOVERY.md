@@ -16,8 +16,8 @@ Grouped read operations that orient the AI. Built in [[FILE-OPERATIONS]] and sur
 
 | Tool | Returns | Notes |
 |---|---|---|
-| `whoami()` | [[DATATYPE-WHOAMI]] | current user + the key's one org + accessible projects |
-| `list_projects()` | [[DATATYPE-PROJECT-SUMMARY]][] | projects in the org |
+| `whoami()` | [[DATATYPE-WHOAMI]] | current user + the key's one workspace + accessible projects |
+| `list_projects()` | [[DATATYPE-PROJECT-SUMMARY]][] | projects in the workspace |
 | `get_project_workflow(project)` | [[DATATYPE-WORKFLOW]] | stages/statuses/labels/members/templates; warms the resolver cache (60s) |
 | `list_my_tasks(limit?, cursor?)` | [[DATATYPE-TASK-SUMMARY]] page | tasks I own **or** report, across accessible projects |
 

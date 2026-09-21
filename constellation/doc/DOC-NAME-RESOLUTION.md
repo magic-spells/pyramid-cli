@@ -16,7 +16,7 @@ cached [[DATATYPE-WORKFLOW]]. Task key/UUID lookup is handled by [[FILE-OPERATIO
 
 | Kind | Precedence |
 |---|---|
-| Project | slug (ci exact) → name (ci exact) → unique fuzzy contains |
+| Project | handle (ci exact) → name (ci exact) → unique fuzzy contains |
 | Stage | per project: key → name (ci) → unique fuzzy |
 | Status | per project: key → name (ci); a stage name where a status is expected → first status of that stage by position |
 | User | email exact → `display_name` exact → unique fuzzy |
@@ -26,7 +26,7 @@ cached [[DATATYPE-WORKFLOW]]. Task key/UUID lookup is handled by [[FILE-OPERATIO
 
 - **Ambiguity is an error, not a guess** — two labels matching "bug" → `ambiguous_label_name`
   with `candidates` ([[DATATYPE-MCP-ERROR]]); the AI asks or picks.
-- **Cache:** in-process 60s TTL keyed by project workflow plus an org-wide project-list cache,
+- **Cache:** in-process 60s TTL keyed by project workflow plus a workspace project-list cache,
   lazy-populated and invalidated by `Resolver.invalidate(...)`.
 - **Force-refresh:** `--no-cache` is parsed by the CLI as a reserved debug flag, but no shipped
   operation consumes it yet.

@@ -153,7 +153,7 @@ export function mapHttpError(status: number, body: unknown): McpError {
 	}
 
 	if (status === 409) {
-		// pyramid-server returns 409 `conflict` for both slug/prefix collisions and a
+		// The Pyramid server returns 409 `conflict` for both handle/prefix collisions and a
 		// missing/stale If-Match precondition (DOC-CONCURRENCY). The read-first retry in
 		// the client handles the racy case; a surfaced conflict means reread + retry.
 		return new McpError('conflict', message, {

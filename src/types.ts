@@ -37,7 +37,7 @@ export type McpErrorCode =
 
 export interface ProjectSummary {
 	id: string;
-	slug: string;
+	handle: string;
 	name: string;
 	task_prefix: string;
 	role: 'admin' | 'pm' | 'member' | 'viewer' | 'guest';
@@ -167,7 +167,7 @@ export interface TimelineEvent {
 
 export interface WhoAmI {
 	user: { id: string; display_name: string; email: string };
-	organization: { id: string; slug: string; name: string; role: 'owner' | 'admin' | 'member' };
+	workspace: { id: string; handle: string; name: string; role: 'owner' | 'admin' | 'member' };
 	projects: ProjectSummary[];
 }
 

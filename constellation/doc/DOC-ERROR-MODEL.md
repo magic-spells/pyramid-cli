@@ -31,7 +31,7 @@ Mapping from the Pyramid envelope ([[EXTERNAL-PYRAMID-API]]) and the resolver:
 | 403 (`forbidden`) | `permission_denied` |
 | 404 (`*_not_found`) | `task_not_found` / `project_not_found` / … |
 | 422 (`validation_failed`) | `validation_failed` (400 only on malformed JSON) |
-| 409 (`conflict`) | `conflict` — If-Match precondition or slug/prefix collision ([[DOC-CONCURRENCY]]) |
+| 409 (`conflict`) | `conflict` — If-Match precondition or handle/prefix collision ([[DOC-CONCURRENCY]]) |
 | resolver ambiguity | `ambiguous_*` (+ `candidates`) |
 | resolver miss | `*_not_found` (+ `hint` listing close matches) |
 | destructive + gate off | `destructive_action_disabled` |

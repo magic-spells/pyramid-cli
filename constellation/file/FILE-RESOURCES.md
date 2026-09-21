@@ -13,7 +13,7 @@ connections:
 
 MCP resources (read-only context the AI can auto-load), implemented in `src/mcp/resources.ts`:
 `pyramid://me` ([[DATATYPE-WHOAMI]]), `pyramid://projects` ([[DATATYPE-PROJECT-SUMMARY]]), and
-`pyramid://projects/{slug}/workflow` ([[DATATYPE-WORKFLOW]]).
+`pyramid://projects/{handle}/workflow` ([[DATATYPE-WORKFLOW]]).
 
 Each resource reuses the shared operation registry where possible (`whoami`, `list_projects`,
 `get_project_workflow`) so resource reads return the same hydrated shapes as the equivalent tools.

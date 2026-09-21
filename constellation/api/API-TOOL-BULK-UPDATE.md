@@ -13,7 +13,7 @@ connections:
 `bulk_update_tasks` / `bulk_set_status` — edit many existing tasks in one call. **The Pyramid API has
 NO bulk-update/move/status endpoint** (only bulk *create* is atomic), so this is a **NON-ATOMIC
 fan-out**: it loops `N × PATCH /v1/tasks/{id}` (or `/move` for status+placement). Decision:
-[[DOC-DESIGN-RULES]] — ship the fan-out now; a tracked `pyramid-server` follow-up (atomic
+[[DOC-DESIGN-RULES]] — ship the fan-out now; a tracked Pyramid server follow-up (atomic
 `PATCH /v1/tasks/bulk`) would upgrade it without changing this shape.
 
 - Input: a shared patch + `task_ids` (or a list of `{ task, fields }`). `confirm` (default false) →

@@ -1,7 +1,7 @@
 // FILE-RESOURCES — MCP resource skin.
 //
 // Two read-only resources, kept minimal:
-//   - pyramid://me        -> the WhoAmI payload (authenticated user + org +
+//   - pyramid://me        -> the WhoAmI payload (authenticated user + workspace +
 //                            projects), via the `whoami` operation.
 //   - pyramid://projects  -> the accessible project list, via the `list_projects`
 //                            operation.
@@ -49,7 +49,7 @@ export function registerResources(server: McpServer, ctx: OpContext): void {
 		'pyramid://me',
 		{
 			title: 'Pyramid identity',
-			description: 'The authenticated user, their org, and accessible projects (whoami).',
+			description: 'The authenticated user, their workspace, and accessible projects (whoami).',
 			mimeType: 'application/json',
 		},
 		async (uri: URL) => {
@@ -82,31 +82,31 @@ export function registerResources(server: McpServer, ctx: OpContext): void {
 		}
 	);
 
-	// pyramid://projects/{slug}/workflow -> the project's assembled workflow (stages,
+	// pyramid://projects/{handle}/workflow -> the project's assembled workflow (stages,
 	// statuses, labels, members, field templates) the model loads to resolve names.
 	server.registerResource(
 		'project-workflow',
-		new ResourceTemplate('pyramid://projects/{slug}/workflow', { list: undefined }),
+		new ResourceTemplate('pyramid://projects/{handle}/workflow', { list: undefined }),
 		{
 			title: 'Project workflow',
-			description: "A project's stages, statuses, labels, members, and field templates, by slug.",
+			description: "A project's stages, statuses, labels, members, and field templates, by handle.",
 			mimeType: 'application/json',
 		},
 		async (uri: URL, variables: Record<string, string | string[]>) => {
-			const raw = variables.slug;
-			const slug = Array.isArray(raw) ? raw[0] : raw;
+			const raw = variables.handle;
+			const handle = Array.isArray(raw) ? raw[0] : raw;
 			const op = findOp('get_project_workflow');
 			let text: string;
-			if (op !== undefined && slug) {
+			if (op !== undefined && handle) {
 				try {
-					const result = await op.run(op.input.parse({ project: slug }), ctx);
+					const result = await op.run(op.input.parse({ project: handle }), ctx);
 					text = JSON.stringify(result, null, 2);
 				} catch (err) {
 					text = JSON.stringify({ error: toMcpError(err).toJSON() }, null, 2);
 				}
 			} else {
 				text = JSON.stringify(
-					{ error: { code: 'validation_failed', message: 'missing project slug' } },
+					{ error: { code: 'validation_failed', message: 'missing project handle' } },
 					null,
 					2
 				);

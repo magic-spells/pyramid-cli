@@ -32,7 +32,7 @@ Naming note (2026-09-17): this repo's folder is `pyramid-cli`, while the npm pac
 
 The **Pyramid HTTP contract is fixed and external** — owned by the `pyramid` repo, in its `server/` Go module ([[EXTERNAL-PYRAMID-API]]). This package adapts to that contract; it does not drive backend behavior. When building a tool, read the real endpoint shape from that repo's plan via the `repo:` selector (`repo: "pyramid"`) rather than guessing. That one plan now covers both the API and the web client, so the client's view of an endpoint is in the same place.
 
-Auth is settled and shipped ([[DOC-AUTH-ORGANIZATION]]): a `pyk_` key is pinned to one organization and inherits exactly its owner's access.
+Auth is settled and shipped ([[DOC-AUTH-WORKSPACE]]): a `pyk_` key is pinned to one workspace and inherits exactly its owner's access.
 
 ## Stack & distribution
 

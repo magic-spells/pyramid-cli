@@ -1,10 +1,10 @@
 // Name -> UUID resolution with deterministic precedence + a 60s workflow cache
 // (FILE-RESOLVER, DOC-NAME-RESOLUTION).
 //
-// Inputs accept human names/keys/slugs; the Resolver maps them to the strict
+// Inputs accept human names/keys/handles; the Resolver maps them to the strict
 // workflow shapes in src/types.ts. The precedence is fixed so the same input
 // always resolves the same way:
-//   - project: slug (ci exact) -> name (ci exact) -> unique fuzzy contains
+//   - project: handle (ci exact) -> name (ci exact) -> unique fuzzy contains
 //   - status:  key (ci) -> name (ci) -> category (ci) -> stage-name (first
 //              status of that stage by position)
 //   - stage:   key (ci) -> name (ci) -> category (ci) -> unique fuzzy contains
@@ -65,7 +65,7 @@ export type ResolveKind = 'project' | 'workflow' | 'status' | 'stage' | 'user' |
 export class Resolver {
 	/** Per-project workflow cache (also the hydration join source). */
 	private readonly workflows = new Map<string, Cached<Workflow>>();
-	/** Org-wide project list cache (backs project-name resolution). */
+	/** Workspace-wide project list cache (backs project-name resolution). */
 	private projects?: Cached<ProjectSummary[]>;
 
 	constructor(private readonly client: ResolverClient) {}
@@ -100,28 +100,28 @@ export class Resolver {
 
 	// ---------- Project ----------
 
-	/** slug (ci exact) -> name (ci exact) -> unique fuzzy contains. */
-	async resolveProject(nameOrSlug: string): Promise<ProjectSummary> {
+	/** handle (ci exact) -> name (ci exact) -> unique fuzzy contains. */
+	async resolveProject(nameOrHandle: string): Promise<ProjectSummary> {
 		const projects = await this.getProjects();
-		const needle = norm(nameOrSlug);
+		const needle = norm(nameOrHandle);
 
-		const bySlug = projects.filter((p) => norm(p.slug) === needle);
+		const byHandle = projects.filter((p) => norm(p.handle) === needle);
 		const byName = projects.filter((p) => norm(p.name) === needle);
-		const fuzzy = projects.filter((p) => contains(p.slug, needle) || contains(p.name, needle));
+		const fuzzy = projects.filter((p) => contains(p.handle, needle) || contains(p.name, needle));
 
 		const match = pick(
 			'project',
 			'ambiguous_project_name',
-			nameOrSlug,
-			[bySlug, byName, fuzzy],
-			(p) => p.slug
+			nameOrHandle,
+			[byHandle, byName, fuzzy],
+			(p) => p.handle
 		);
 		if (match) return match;
 
-		throw new McpError('project_not_found', `No project matches "${nameOrSlug}".`, {
+		throw new McpError('project_not_found', `No project matches "${nameOrHandle}".`, {
 			candidates: shortlist(
-				nameOrSlug,
-				projects.map((p) => p.slug)
+				nameOrHandle,
+				projects.map((p) => p.handle)
 			),
 		});
 	}
@@ -263,7 +263,7 @@ export class Resolver {
 	/**
 	 * Drop cached data after a mutating op. One getWorkflow warms every per-project
 	 * kind, so any per-project kind invalidates the whole project workflow entry;
-	 * `project` also clears the org-wide project list. With no `kind`, clear
+	 * `project` also clears the workspace-wide project list. With no `kind`, clear
 	 * everything cached for the project.
 	 */
 	invalidate(projectId: string, kind?: ResolveKind): void {
@@ -375,7 +375,7 @@ function normalizeProject(raw: unknown): ProjectSummary {
 	const p = rec(raw);
 	return {
 		id: str(p.id),
-		slug: str(p.slug),
+		handle: str(p.handle),
 		name: str(p.name),
 		task_prefix: str(p.task_prefix),
 		role: projectRole(p.role),

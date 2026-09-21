@@ -102,7 +102,7 @@ function toProjectSummary(raw: unknown): ProjectSummary {
 	const p = rec(raw);
 	return {
 		id: readStr(p.id) ?? '',
-		slug: readStr(p.slug) ?? '',
+		handle: readStr(p.handle) ?? '',
 		name: readStr(p.name) ?? '',
 		task_prefix: readStr(p.task_prefix) ?? '',
 		role: projectRole(p.role),
@@ -110,12 +110,12 @@ function toProjectSummary(raw: unknown): ProjectSummary {
 	};
 }
 
-const ORGANIZATION_ROLES = ['owner', 'admin', 'member'] as const;
-type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
+const WORKSPACE_ROLES = ['owner', 'admin', 'member'] as const;
+type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
-function organizationRole(v: unknown): OrganizationRole {
-	return (ORGANIZATION_ROLES as readonly string[]).includes(v as string)
-		? (v as OrganizationRole)
+function workspaceRole(v: unknown): WorkspaceRole {
+	return (WORKSPACE_ROLES as readonly string[]).includes(v as string)
+		? (v as WorkspaceRole)
 		: 'member';
 }
 
@@ -125,20 +125,20 @@ function organizationRole(v: unknown): OrganizationRole {
 
 const whoami: Operation<Record<string, never>, WhoAmI> = {
 	name: 'whoami',
-	summary: 'Report the authenticated user, their org, and accessible projects.',
+	summary: 'Report the authenticated user, their workspace, and accessible projects.',
 	input: z.object({}),
 	meta: { cli: { group: 'whoami', verb: '' } },
 	async run(_input, ctx): Promise<WhoAmI> {
-		// getMe carries the user (and MAY embed an org). When it doesn't, fall
-		// back to the key's pinned org (the first listOrganizations entry).
-		const [me, projectsRaw, organizations] = await Promise.all([
+		// getMe carries the user (and MAY embed a workspace). When it doesn't, fall
+		// back to the key's pinned workspace (the first listWorkspaces entry).
+		const [me, projectsRaw, workspaces] = await Promise.all([
 			ctx.client.getMe(),
 			ctx.client.listProjects(),
-			ctx.client.listOrganizations().catch(() => [] as unknown[]),
+			ctx.client.listWorkspaces().catch(() => [] as unknown[]),
 		]);
 
 		const m = rec(me);
-		const orgRaw = rec(m.organization ?? organizations[0]);
+		const workspaceRaw = rec(m.workspace ?? workspaces[0]);
 
 		return {
 			user: {
@@ -146,11 +146,11 @@ const whoami: Operation<Record<string, never>, WhoAmI> = {
 				display_name: readStr(m.display_name) ?? readStr(m.email) ?? '',
 				email: readStr(m.email) ?? '',
 			},
-			organization: {
-				id: readStr(orgRaw.id) ?? '',
-				slug: readStr(orgRaw.slug) ?? '',
-				name: readStr(orgRaw.name) ?? readStr(orgRaw.slug) ?? '',
-				role: organizationRole(orgRaw.role),
+			workspace: {
+				id: readStr(workspaceRaw.id) ?? '',
+				handle: readStr(workspaceRaw.handle) ?? '',
+				name: readStr(workspaceRaw.name) ?? readStr(workspaceRaw.handle) ?? '',
+				role: workspaceRole(workspaceRaw.role),
 			},
 			projects: projectsRaw.map(toProjectSummary),
 		};
@@ -242,7 +242,7 @@ const listMyTasks: Operation<ListMyTasksInput, Page<TaskSummary>> = {
 
 /** A neutral workflow used when a task row carries no resolvable project_id. */
 const EMPTY_WORKFLOW: Workflow = {
-	project: { id: '', slug: '', name: '', task_prefix: '', role: 'member', archived: false },
+	project: { id: '', handle: '', name: '', task_prefix: '', role: 'member', archived: false },
 	stages: [],
 	statuses: [],
 	labels: [],
@@ -1115,7 +1115,7 @@ type SearchTasksInput = z.infer<typeof searchTasksInput>;
 
 const searchTasks: Operation<SearchTasksInput, Page<TaskSummary>> = {
 	name: 'search_tasks',
-	summary: 'Full-text search tasks across the org by title/key/content. Returns one page.',
+	summary: 'Full-text search tasks across the workspace by title/key/content. Returns one page.',
 	input: searchTasksInput,
 	meta: { cli: { group: 'task', verb: 'search', positionals: ['query'] } },
 	async run(input, ctx): Promise<Page<TaskSummary>> {

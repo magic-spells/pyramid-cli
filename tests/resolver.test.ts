@@ -5,7 +5,7 @@
 // FAKE returning fixed fixtures, so nothing here touches HTTP. We assert the
 // DOC-NAME-RESOLUTION contract end to end:
 //
-//   - precedence:  slug (ci exact) beats fuzzy contains; key beats name;
+//   - precedence:  handle (ci exact) beats fuzzy contains; key beats name;
 //                  email beats display_name; a stage name where a STATUS is
 //                  expected resolves to that stage's first status by position.
 //   - ambiguity:   a tier with >1 match throws McpError('ambiguous_*_name', …)
@@ -30,24 +30,24 @@ import { McpError } from '../src/errors.js';
 //
 // listProjects returns a bare array of raw project rows. getWorkflow returns a
 // raw workflow payload keyed by project id. Field names match the server model
-// (id/slug/name/task_prefix/role for projects; workflow stages[]/statuses[]
+// (id/handle/name/task_prefix/role for projects; workflow stages[]/statuses[]
 // carrying stage_id/position; members with email/display_name; labels).
 
 const PROJECTS: readonly unknown[] = [
-	{ id: 'p-apollo', slug: 'apollo', name: 'Apollo', task_prefix: 'APO', role: 'admin' },
+	{ id: 'p-apollo', handle: 'apollo', name: 'Apollo', task_prefix: 'APO', role: 'admin' },
 	{
 		id: 'p-website',
-		slug: 'website-redesign',
+		handle: 'website-redesign',
 		name: 'Website Redesign',
 		task_prefix: 'WEB',
 		role: 'pm',
 	},
 	// Two projects that BOTH fuzzy-contain "web" (website-redesign + webhooks),
 	// so a non-exact "web" query is ambiguous across the fuzzy tier — yet an
-	// exact slug query must still win cleanly (precedence: slug exact > fuzzy).
+	// exact handle query must still win cleanly (precedence: handle exact > fuzzy).
 	{
 		id: 'p-webhooks',
-		slug: 'webhooks',
+		handle: 'webhooks',
 		name: 'Webhooks Service',
 		task_prefix: 'HOOK',
 		role: 'member',
@@ -185,30 +185,30 @@ async function rejection(p: Promise<unknown>): Promise<McpError> {
 // ============================================================================
 
 describe('Resolver — precedence (DOC-NAME-RESOLUTION)', () => {
-	it('project: exact slug beats a fuzzy contains match', async () => {
+	it('project: exact handle beats a fuzzy contains match', async () => {
 		const r = new Resolver(makeFakeClient());
-		// "webhooks" is an exact slug AND fuzzy-contains "website-redesign"? No —
-		// but "website-redesign" exact-slug must NOT be dragged into ambiguity by
-		// the fuzzy tier that also contains "webhooks". Exact slug short-circuits.
+		// "webhooks" is an exact handle AND fuzzy-contains "website-redesign"? No —
+		// but "website-redesign" exact-handle must NOT be dragged into ambiguity by
+		// the fuzzy tier that also contains "webhooks". Exact handle short-circuits.
 		const p = await r.resolveProject('website-redesign');
 		expect(p.id).toBe('p-website');
-		expect(p.slug).toBe('website-redesign');
+		expect(p.handle).toBe('website-redesign');
 	});
 
-	it('project: exact slug match is case-insensitive', async () => {
+	it('project: exact handle match is case-insensitive', async () => {
 		const r = new Resolver(makeFakeClient());
 		expect((await r.resolveProject('APOLLO')).id).toBe('p-apollo');
 		expect((await r.resolveProject('  apollo  ')).id).toBe('p-apollo');
 	});
 
-	it('project: name (ci exact) resolves when no slug matches', async () => {
+	it('project: name (ci exact) resolves when no handle matches', async () => {
 		const r = new Resolver(makeFakeClient());
 		expect((await r.resolveProject('Website Redesign')).id).toBe('p-website');
 	});
 
-	it('project: a unique fuzzy contains resolves when neither slug nor name is exact', async () => {
+	it('project: a unique fuzzy contains resolves when neither handle nor name is exact', async () => {
 		const r = new Resolver(makeFakeClient());
-		// "apoll" is not an exact slug/name, fuzzy-contains only "apollo" → unique.
+		// "apoll" is not an exact handle/name, fuzzy-contains only "apollo" → unique.
 		expect((await r.resolveProject('apoll')).id).toBe('p-apollo');
 	});
 
