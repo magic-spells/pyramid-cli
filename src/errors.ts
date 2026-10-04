@@ -71,7 +71,7 @@ interface PyramidEnvelope {
  * Defensively read `{ error: { code, message, details } }` out of a parsed body.
  * `field` is lifted out of `details` because it is the one detail the backend
  * promises on a validation failure (`{"field":"owner_id"}`) and the one a caller
- * cannot recover any other way: a PATCH carrying both owner_id and reporter_id
+ * cannot recover any other way: a PATCH carrying both owner_id and reviewer_id
  * gets one "user is not a member of this project" message for either half.
  */
 function readEnvelope(body: unknown): { code?: string; message?: string; field?: string } {

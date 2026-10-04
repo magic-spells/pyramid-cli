@@ -27,7 +27,7 @@ interface Workflow {
 }
 
 interface WorkflowMember {
-  id: string;             // the USER id — what owner_id/reporter_id/author_id reference
+  id: string;             // the USER id — what owner_id/reviewer_id/author_id reference
   display_name: string;
   email: string;
   role: string;           // project role: admin | pm | member | viewer | guest

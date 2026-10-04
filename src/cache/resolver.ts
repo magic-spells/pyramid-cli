@@ -415,7 +415,7 @@ function normalizeStatus(raw: unknown): WorkflowStatus {
  * user's name/email under a nested `user` (DOC-BACKEND-CONTRACT) and its own
  * `job_title`; we read those first and fall back to top-level fields for a
  * flatter shape. The member id is
- * the USER id (what owner_id/reporter_id/author_id reference), so prefer
+ * the USER id (what owner_id/reviewer_id/author_id reference), so prefer
  * `user.id` / `user_id` over the membership row's own id.
  */
 function normalizeMember(raw: unknown): WorkflowMember {

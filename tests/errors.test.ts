@@ -78,9 +78,9 @@ describe('mapHttpError — status -> code', () => {
 		expect(err.hint).toBeUndefined();
 	});
 
-	// A PATCH can carry both owner_id and reporter_id, and a non-member in either
+	// A PATCH can carry both owner_id and reviewer_id, and a non-member in either
 	// half yields the SAME message — only details.field says which one.
-	it('names details.field in the hint on a 422 (non-member owner/reporter)', () => {
+	it('names details.field in the hint on a 422 (non-member owner/reviewer)', () => {
 		const err = mapHttpError(422, {
 			error: {
 				code: 'validation_failed',

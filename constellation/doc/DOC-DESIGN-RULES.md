@@ -22,7 +22,7 @@ they hold for BOTH surfaces (MCP tools + CLI).
    both `stage` and `status` except to resolve ambiguity. Placement is by status; a body `stage_id`
    is ignored server-side.
 4. **Hydrate every UUID on output** — NO bare UUID in any user-facing field. Every returned
-   `status_id` → status name + derived stage; `owner_id`/`reporter_id`/`author_id`/`mentions` →
+   `status_id` → status name + derived stage; `owner_id`/`reviewer_id`/`author_id`/`mentions` →
    display name; label ids → names. Centralized so no operation can leak an id (a tested invariant).
 5. **Comments are stage-scoped** — a root comment needs a `stage_id`; default to the task's current
    stage when omitted.

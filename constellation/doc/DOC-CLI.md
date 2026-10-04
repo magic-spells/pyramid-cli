@@ -35,15 +35,15 @@ the two surfaces.
 ## Surface (mirrors the MCP operations)
 
 - `pyramid whoami` · `pyramid project list` · `pyramid project workflow <PROJECT>`
-- `pyramid task list [--project P] [--status S] [--owner U] [--reporter U] [--mine] [--archived]`
+- `pyramid task list [--project P] [--status S] [--owner U] [--reviewer U] [--mine] [--archived]`
 - `pyramid task show <KEY>` · `pyramid task next` — the caller's work queue
 - `pyramid task timeline <KEY> [--event-type owner_changed] [--limit N]` — what happened to it
-- `pyramid task create <TITLE> [--owner U] [--reporter U] …` · `pyramid task bulk <PROJECT> --template T --file tasks.json` · `pyramid task update <KEY> [--owner U|--owner ""] …`
+- `pyramid task create <TITLE> [--owner U] [--reviewer U] …` · `pyramid task bulk <PROJECT> --template T --file tasks.json` · `pyramid task update <KEY> [--owner U|--owner ""] …`
 - `pyramid task move <KEY> --status "In Review" [--after KEY | --before KEY]`
 - `pyramid task comment <KEY> "…"` · `pyramid comment reply <ID> "…"`
 - `pyramid task archive <KEY>` (`--unarchive` restores) · `pyramid task delete <KEY> --yes` — gated ([[DOC-DESIGN-RULES]] r11)
 
-People are named with `--owner` and `--reporter` everywhere — never "assignee". On
+People are named with `--owner` and `--reviewer` everywhere — never "assignee". On
 `task update`, an empty `--owner ""` clears the field.
 
 Inputs accept **names / keys**, not UUIDs ([[DOC-NAME-RESOLUTION]]); output hydrates names —

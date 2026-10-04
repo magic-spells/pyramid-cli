@@ -191,7 +191,7 @@ const getProjectWorkflow: Operation<GetProjectWorkflowInput, Workflow> = {
 
 // No `role`: GET /v1/me/tasks accepts `?role=` and IGNORES it server-side
 // (DOC-BACKEND-CONTRACT), so offering the knob would promise a narrowing that
-// never happens. Narrow with list_tasks({ owner }) / list_tasks({ reporter }).
+// never happens. Narrow with list_tasks({ owner }) / list_tasks({ reviewer }).
 const listMyTasksInput = z.object({
 	limit: z.number().int().min(1).max(50).optional(),
 	cursor: z.string().optional(),
@@ -203,7 +203,7 @@ const DEFAULT_LIMIT = 25;
 const listMyTasks: Operation<ListMyTasksInput, Page<TaskSummary>> = {
 	name: 'list_my_tasks',
 	summary:
-		'List tasks you own or report, newest first, across projects. Returns one page with a cursor.',
+		'List tasks you own or review, newest first, across projects. Returns one page with a cursor.',
 	input: listMyTasksInput,
 	meta: { cli: { group: 'task', verb: 'next' } },
 	async run(input, ctx): Promise<Page<TaskSummary>> {
@@ -390,7 +390,7 @@ async function resolveMentionIds(
 /**
  * Build a resolved create-task body from already-known projectId + names, to the
  * REAL backend contract (DOC-BACKEND-CONTRACT). Ownership is FLAT: `owner` and
- * `reporter` resolve to top-level `owner_id`/`reporter_id`. Custom fields are a
+ * `reviewer` resolve to top-level `owner_id`/`reviewer_id`. Custom fields are a
  * `field_values` map keyed by field UUID; labels are `label_ids`.
  */
 async function buildCreateBody(
@@ -402,14 +402,12 @@ async function buildCreateBody(
 		stage?: string;
 		status?: string;
 		owner?: string;
-		reporter?: string;
+		reviewer?: string;
 		labels?: string[];
 		priority?: string;
 		due_date?: string;
 		estimate_hours?: number;
 		guest_visible?: boolean;
-		guest_title?: string;
-		guest_description?: string;
 		custom_fields?: { field: string; value?: unknown }[];
 	}
 ): Promise<Record<string, unknown>> {
@@ -419,22 +417,18 @@ async function buildCreateBody(
 	if (row.due_date !== undefined) body.due_date = row.due_date;
 	if (row.estimate_hours !== undefined) body.estimate = row.estimate_hours;
 	if (row.guest_visible !== undefined) body.guest_visible = row.guest_visible;
-	if (row.guest_title !== undefined) body.guest_title = row.guest_title;
-	if (row.guest_description !== undefined) {
-		body.guest_description = row.guest_description;
-	}
 
 	// The status carries its stage; resolve it once (the server derives the stage).
 	const resolvedStatus = await resolveStatusWithStage(ctx, projectId, row.stage, row.status);
 	if (resolvedStatus !== undefined) body.status_id = resolvedStatus.id;
 
-	// owner/reporter -> TOP-LEVEL owner_id/reporter_id. No stage to derive: a task
-	// has one owner and one reporter (DATATYPE-CREATE-TASK-INPUT).
+	// owner/reviewer -> TOP-LEVEL owner_id/reviewer_id. No stage to derive: a task
+	// has one owner and one reviewer (DATATYPE-CREATE-TASK-INPUT).
 	if (row.owner !== undefined) {
 		body.owner_id = (await ctx.resolver.resolveUser(projectId, row.owner)).id;
 	}
-	if (row.reporter !== undefined) {
-		body.reporter_id = (await ctx.resolver.resolveUser(projectId, row.reporter)).id;
+	if (row.reviewer !== undefined) {
+		body.reviewer_id = (await ctx.resolver.resolveUser(projectId, row.reviewer)).id;
 	}
 
 	const labelIds = await resolveLabelIds(ctx, projectId, row.labels);
@@ -544,9 +538,9 @@ const taskListInput = z.object({
 	project: z.string(),
 	status: z.string().optional(),
 	stage: z.string().optional(),
-	// Owner and Reporter — the words the product uses. There is no "assignee".
+	// Owner and Reviewer — the words the product uses. There is no "assignee".
 	owner: z.string().optional(),
-	reporter: z.string().optional(),
+	reviewer: z.string().optional(),
 	label: z.string().optional(),
 	query: z.string().optional(),
 	archived: z.boolean().optional(),
@@ -558,7 +552,7 @@ type TaskListInput = z.infer<typeof taskListInput>;
 const taskList: Operation<TaskListInput, Page<TaskSummary>> = {
 	name: 'list_tasks',
 	summary:
-		"List a project's tasks, filtered by status/stage/owner/reporter/label/query. Returns one page with a cursor.",
+		"List a project's tasks, filtered by status/stage/owner/reviewer/label/query. Returns one page with a cursor.",
 	input: taskListInput,
 	meta: { cli: { group: 'task', verb: 'list', positionals: ['project'] } },
 	async run(input, ctx): Promise<Page<TaskSummary>> {
@@ -586,9 +580,9 @@ const taskList: Operation<TaskListInput, Page<TaskSummary>> = {
 				input.owner !== undefined
 					? (await ctx.resolver.resolveUser(project.id, input.owner)).id
 					: undefined;
-			const reporterId =
-				input.reporter !== undefined
-					? (await ctx.resolver.resolveUser(project.id, input.reporter)).id
+			const reviewerId =
+				input.reviewer !== undefined
+					? (await ctx.resolver.resolveUser(project.id, input.reviewer)).id
 					: undefined;
 			const labelId =
 				input.label !== undefined
@@ -599,7 +593,7 @@ const taskList: Operation<TaskListInput, Page<TaskSummary>> = {
 				status: statusId,
 				stage_id: stageId,
 				owner_id: ownerId,
-				reporter_id: reporterId,
+				reviewer_id: reviewerId,
 				label_id: labelId,
 				q: input.query,
 				limit: input.limit ?? DEFAULT_LIMIT,
@@ -627,7 +621,7 @@ const taskList: Operation<TaskListInput, Page<TaskSummary>> = {
 const taskShowInput = z.object({
 	task: z.string(),
 	// The backend's only drill-in is `?expand`, which inlines the related owner,
-	// reporter, and label rows (DOC-BACKEND-CONTRACT). It does NOT expose
+	// reviewer, and label rows (DOC-BACKEND-CONTRACT). It does NOT expose
 	// timeline / comments / attachments — those are separate tools (e.g. list_comments).
 	expand: z.boolean().optional(),
 });
@@ -636,14 +630,14 @@ type TaskShowInput = z.infer<typeof taskShowInput>;
 const taskShow: Operation<TaskShowInput, TaskDetail> = {
 	name: 'get_task',
 	summary:
-		"Show one task's full detail by key (WEB-42) or UUID; `expand` inlines owner/reporter/labels.",
+		"Show one task's full detail by key (WEB-42) or UUID; `expand` inlines owner/reviewer/labels.",
 	input: taskShowInput,
 	meta: { cli: { group: 'task', verb: 'show', positionals: ['task'] } },
 	async run(input, ctx): Promise<TaskDetail> {
 		const ref = await resolveTaskRef(ctx, input.task);
 		const raw = await ctx.client.getTask(
 			ref.id,
-			input.expand ? 'owner,reporter,labels' : undefined
+			input.expand ? 'owner,reviewer,labels' : undefined
 		);
 		const projectId = readStr(rec(raw).project_id) ?? ref.projectId;
 		return hydrateDetailFor(ctx, raw, projectId);
@@ -663,21 +657,19 @@ const taskCreateInput = z.object({
 	stage: z.string().optional(),
 	status: z.string().optional(),
 	owner: z.string().optional(),
-	reporter: z.string().optional(),
+	reviewer: z.string().optional(),
 	labels: z.array(z.string()).optional(),
 	priority: priorityEnum.optional(),
 	due_date: z.string().optional(),
 	estimate_hours: z.number().optional(),
 	guest_visible: z.boolean().optional(),
-	guest_title: z.string().optional(),
-	guest_description: z.string().optional(),
 	custom_fields: z.array(customFieldSchema).optional(),
 });
 type TaskCreateInput = z.infer<typeof taskCreateInput>;
 
 const taskCreate: Operation<TaskCreateInput, TaskDetail> = {
 	name: 'create_task',
-	summary: 'Create a task in a project. Accepts names/keys for stage/status/owner/reporter/labels.',
+	summary: 'Create a task in a project. Accepts names/keys for stage/status/owner/reviewer/labels.',
 	input: taskCreateInput,
 	meta: { cli: { group: 'task', verb: 'create', positionals: ['title'] } },
 	async run(input, ctx): Promise<TaskDetail> {
@@ -708,14 +700,12 @@ const taskBulkCreateInput = z.object({
 				stage: z.string().optional(),
 				status: z.string().optional(),
 				owner: z.string().optional(),
-				reporter: z.string().optional(),
+				reviewer: z.string().optional(),
 				labels: z.array(z.string()).optional(),
 				priority: priorityEnum.optional(),
 				due_date: z.string().optional(),
 				estimate_hours: z.number().optional(),
 				guest_visible: z.boolean().optional(),
-				guest_title: z.string().optional(),
-				guest_description: z.string().optional(),
 				custom_fields: z.array(customFieldSchema).optional(),
 			})
 		)
@@ -803,10 +793,8 @@ const taskUpdateInput = z.object({
 	start_date: z.string().nullable().optional(),
 	estimate: z.number().optional(),
 	guest_visible: z.boolean().optional(),
-	guest_title: z.string().optional(),
-	guest_description: z.string().optional(),
 	owner: z.string().nullable().optional(),
-	reporter: z.string().nullable().optional(),
+	reviewer: z.string().nullable().optional(),
 	add_labels: z.array(z.string()).optional(),
 	remove_labels: z.array(z.string()).optional(),
 	custom_fields: z.array(customFieldSchema).optional(),
@@ -816,14 +804,14 @@ type TaskUpdateInput = z.infer<typeof taskUpdateInput>;
 const taskUpdate: Operation<TaskUpdateInput, TaskDetail> = {
 	name: 'update_task',
 	summary:
-		'Update a task, including its owner/reporter (pass null to clear). Labels and custom fields fan out to their endpoints.',
+		'Update a task, including its owner/reviewer (pass null to clear). Labels and custom fields fan out to their endpoints.',
 	input: taskUpdateInput,
 	meta: { cli: { group: 'task', verb: 'update', positionals: ['task'] } },
 	async run(input, ctx): Promise<TaskDetail> {
 		const ref = await resolveTaskRef(ctx, input.task);
 		const projectId = ref.projectId;
 
-		// 1) THE PATCH (DOC-BACKEND-CONTRACT): content fields PLUS owner/reporter,
+		// 1) THE PATCH (DOC-BACKEND-CONTRACT): content fields PLUS owner/reviewer,
 		// which are top-level nullable columns now. One write, one If-Match
 		// (read-first, added by the client) — so a reassignment can no longer land
 		// while the content change is rejected. Labels and field_values still are
@@ -836,22 +824,18 @@ const taskUpdate: Operation<TaskUpdateInput, TaskDetail> = {
 		if (input.start_date !== undefined) patch.start_date = input.start_date;
 		if (input.estimate !== undefined) patch.estimate = input.estimate;
 		if (input.guest_visible !== undefined) patch.guest_visible = input.guest_visible;
-		if (input.guest_title !== undefined) patch.guest_title = input.guest_title;
-		if (input.guest_description !== undefined) {
-			patch.guest_description = input.guest_description;
-		}
 
-		// owner/reporter: a name resolves to a UUID; an explicit null CLEARS the
+		// owner/reviewer: a name resolves to a UUID; an explicit null CLEARS the
 		// field (and must survive as null, not be dropped as "unset").
 		if (input.owner !== undefined) {
 			patch.owner_id =
 				input.owner === null ? null : (await ctx.resolver.resolveUser(projectId, input.owner)).id;
 		}
-		if (input.reporter !== undefined) {
-			patch.reporter_id =
-				input.reporter === null
+		if (input.reviewer !== undefined) {
+			patch.reviewer_id =
+				input.reviewer === null
 					? null
-					: (await ctx.resolver.resolveUser(projectId, input.reporter)).id;
+					: (await ctx.resolver.resolveUser(projectId, input.reviewer)).id;
 		}
 
 		if (Object.keys(patch).length > 0) {

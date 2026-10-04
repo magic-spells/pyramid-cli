@@ -7,7 +7,7 @@
 // any hydrated field a model/user would read:
 //   - status_id            -> { id, name }            (status.name)
 //   - status.stage_id      -> stage { id, name }      (status carries its stage)
-//   - owner_id/reporter_id -> UserStub | null         (member.display_name + job_title)
+//   - owner_id/reviewer_id -> UserStub | null         (member.display_name + job_title)
 //   - author_id/mentions[] -> UserStub                (member.display_name)
 //   - label ids            -> label names (string[])
 // `key` is provided by the server and passed through. Every field is read
@@ -38,7 +38,7 @@ export function hydrateTaskSummary(raw: any, workflow: Workflow): TaskSummary {
 		status: statusRef(workflow, statusId),
 		stage: stageRefForStatus(workflow, statusId, r),
 		owner: ownerStub(workflow, r.owner, r.owner_id),
-		reporter: ownerStub(workflow, r.reporter, r.reporter_id),
+		reviewer: ownerStub(workflow, r.reviewer, r.reviewer_id),
 		labels: labelNames(workflow, r.labels ?? r.label_ids),
 		archived: r.archived_at != null || r.archived === true,
 		updated_at: str(r.updated_at),
@@ -136,7 +136,7 @@ function hydrateReply(raw: any, workflow: Workflow): Omit<TaskComment, 'replies'
  * are the only shapes we claim to know, so they are the only ones joined to a
  * name (DATATYPE-TIMELINE-EVENT: "resolves names only where it knows the type").
  */
-const PERSON_VALUED_EVENTS = new Set(['owner_changed', 'reporter_changed']);
+const PERSON_VALUED_EVENTS = new Set(['owner_changed', 'reviewer_changed']);
 
 /**
  * Raw timeline row -> TimelineEvent. The actor is always joined to a name. The
@@ -241,7 +241,7 @@ function displayName(wf: Workflow, userId: string): string {
 }
 
 /**
- * Owner/reporter -> UserStub | null. Accepts an expanded stub object
+ * Owner/reviewer -> UserStub | null. Accepts an expanded stub object
  * (`{ id, display_name }`) OR a bare id string; null/absent -> null. Always
  * joins to a display_name via the workflow so no bare UUID surfaces.
  */

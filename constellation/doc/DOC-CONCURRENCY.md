@@ -24,7 +24,7 @@ valid precondition is rejected — so the MCP must participate, transparently.
 - **Failure.** Absent **or** stale `If-Match` → HTTP **409** with envelope code `conflict`
   (the two cases differ only by `message`). There is no 412.
 
-Because owner/reporter now ride the task PATCH ([[DOC-BACKEND-CONTRACT]]), an ownership change
+Because owner/reviewer now ride the task PATCH ([[DOC-BACKEND-CONTRACT]]), an ownership change
 is covered by the same precondition as any other field — there is no longer an unguarded
 `stage-responsibilities` write that could land while the content patch was rejected.
 

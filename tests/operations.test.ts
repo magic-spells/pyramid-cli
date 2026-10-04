@@ -319,7 +319,7 @@ describe('operation: whoami (real registry)', () => {
 
 // --- task.create ----------------------------------------------------------
 //
-// Spec: resolveProject; resolve stage/status/owner/reporter/labels; stage w/o
+// Spec: resolveProject; resolve stage/status/owner/reviewer/labels; stage w/o
 // status -> first status of the stage by position; inconsistent stage+status ->
 // status_not_in_stage; createTask called with resolved UUIDs; output hydrated.
 
@@ -1259,13 +1259,13 @@ describe('operation: delete_task (real registry)', () => {
 // --- update_task (real op, PATCH + label/field fan-out) --------------------
 //
 // REAL contract: the PATCH body carries the content fields AND owner_id/
-// reporter_id (an explicit null clears one). Only labels and field_values still
+// reviewer_id (an explicit null clears one). Only labels and field_values still
 // FAN OUT to their dedicated endpoints. The op re-fetches + hydrates the task at
 // the end. (The If-Match read-first flow lives inside the client's updateTask/
 // deleteTask and is tested at the client level.)
 
 describe('operation: update_task (real registry)', () => {
-	it('sends owner/reporter ON the PATCH and fans only labels/fields out to dedicated endpoints', async () => {
+	it('sends owner/reviewer ON the PATCH and fans only labels/fields out to dedicated endpoints', async () => {
 		const op = operationsByName.get('update_task')!;
 		expect(op).toBeDefined();
 
@@ -1376,12 +1376,12 @@ describe('operation: update_task (real registry)', () => {
 		}));
 		const ctx = makeCtx({ getTask, updateTask }, resolver);
 
-		await op.run({ task: TASK_UUID, owner: null, reporter: 'Bob Jones' }, ctx);
+		await op.run({ task: TASK_UUID, owner: null, reviewer: 'Bob Jones' }, ctx);
 
 		// null clears; it must not be dropped as "unset", and must not be resolved.
 		expect(updateTask).toHaveBeenCalledWith(TASK_UUID, {
 			owner_id: null,
-			reporter_id: 'u-bob',
+			reviewer_id: 'u-bob',
 		});
 		expect(resolver.resolveUser).toHaveBeenCalledTimes(1);
 	});
@@ -1489,7 +1489,7 @@ describe('create_task: field validation + ownership', () => {
 		expect(createTask).not.toHaveBeenCalled();
 	});
 
-	it('resolves owner AND reporter to top-level ids; rejects the removed assignments[] input', async () => {
+	it('resolves owner AND reviewer to top-level ids; rejects the removed assignments[] input', async () => {
 		const op = operationsByName.get('create_task')!;
 		const resolver = makeResolver();
 		const createTask = vi.fn(async () => ({
@@ -1507,14 +1507,14 @@ describe('create_task: field validation + ownership', () => {
 				title: 'X',
 				status: 'In Review',
 				owner: 'Ann Smith',
-				reporter: 'Bob Jones',
+				reviewer: 'Bob Jones',
 			},
 			ctx
 		);
 
 		const body = createTask.mock.calls[0]![1] as Record<string, unknown>;
 		expect(body.owner_id).toBe('u-ann');
-		expect(body.reporter_id).toBe('u-bob');
+		expect(body.reviewer_id).toBe('u-bob');
 		expect(body).not.toHaveProperty('stage_responsibilities');
 
 		// `assignments` is gone from the schema, not silently ignored.
@@ -1522,25 +1522,25 @@ describe('create_task: field validation + ownership', () => {
 	});
 });
 
-// --- list_tasks: Owner / Reporter filters (never "assignee") ----------------
+// --- list_tasks: Owner / Reviewer filters (never "assignee") ----------------
 
-describe('list_tasks: owner/reporter filters', () => {
-	it('resolves --owner and --reporter to owner_id/reporter_id, and has no assignee input', async () => {
+describe('list_tasks: owner/reviewer filters', () => {
+	it('resolves --owner and --reviewer to owner_id/reviewer_id, and has no assignee input', async () => {
 		const op = operationsByName.get('list_tasks')!;
 		const resolver = makeResolver();
 		const listTasks = vi.fn(async () => ({ data: [], cursor: null }));
 		const ctx = makeCtx({ listTasks }, resolver);
 
-		await op.run({ project: 'apollo', owner: 'ann@example.com', reporter: 'Bob Jones' }, ctx);
+		await op.run({ project: 'apollo', owner: 'ann@example.com', reviewer: 'Bob Jones' }, ctx);
 
 		expect(listTasks.mock.calls[0]![1]).toMatchObject({
 			owner_id: 'u-ann',
-			reporter_id: 'u-bob',
+			reviewer_id: 'u-bob',
 		});
-		// the product says Owner and Reporter; "assignee" is gone from the surface.
+		// the product says Owner and Reviewer; "assignee" is gone from the surface.
 		expect(op.input.shape).not.toHaveProperty('assignee');
 		expect(op.input.shape).toHaveProperty('owner');
-		expect(op.input.shape).toHaveProperty('reporter');
+		expect(op.input.shape).toHaveProperty('reviewer');
 	});
 
 	it('labels a hydrated owner with the job_title the workflow already knows', async () => {
@@ -1554,7 +1554,7 @@ describe('list_tasks: owner/reporter filters', () => {
 			project_id: 'p-apollo',
 			status_id: 'st-review',
 			owner_id: 'u-ann',
-			reporter_id: 'u-bob',
+			reviewer_id: 'u-bob',
 			updated_at: '2026-06-16T00:00:00Z',
 		}));
 		const out = (await op.run(
@@ -1564,8 +1564,8 @@ describe('list_tasks: owner/reporter filters', () => {
 
 		expect(out.owner).toMatchObject({ display_name: 'Ann Smith', job_title: 'Design Lead' });
 		// no title known -> the key is simply absent, not an empty string.
-		expect(out.reporter).toMatchObject({ display_name: 'Bob Jones' });
-		expect(out.reporter).not.toHaveProperty('job_title');
+		expect(out.reviewer).toMatchObject({ display_name: 'Bob Jones' });
+		expect(out.reviewer).not.toHaveProperty('job_title');
 	});
 
 	it('keeps the expanded stub profile fields when the server sends them', async () => {
@@ -1592,7 +1592,7 @@ describe('list_tasks: owner/reporter filters', () => {
 		)) as TaskDetail;
 
 		// the ref lookup reads the task lean; the expand ride-along is the 2nd call.
-		expect(getTask).toHaveBeenLastCalledWith('t1', 'owner,reporter,labels');
+		expect(getTask).toHaveBeenLastCalledWith('t1', 'owner,reviewer,labels');
 		// the expanded row wins over the workflow's copy.
 		expect(out.owner).toMatchObject({
 			first_name: 'Ann',
@@ -1644,7 +1644,7 @@ describe('operation: get_task_timeline (real registry)', () => {
 		});
 
 		// the actor is joined to a name, and so are the values of the event types whose
-		// shape we KNOW is a bare user uuid (owner_changed / reporter_changed) — a raw
+		// shape we KNOW is a bare user uuid (owner_changed / reviewer_changed) — a raw
 		// uuid in a history line is unreadable. null stays null.
 		expect(page.items[0]).toMatchObject({
 			id: 'ev-1',
@@ -1701,7 +1701,7 @@ describe('operation: get_task_timeline (real registry)', () => {
 				// uuid survives rather than collapsing to a blank name.
 				{
 					id: 'ev-4',
-					event_type: 'reporter_changed',
+					event_type: 'reviewer_changed',
 					old_value: 'u-stranger',
 					new_value: null,
 					data: { task_id: TASK_UUID },

@@ -86,7 +86,7 @@ export interface Workflow {
 
 /**
  * A person as every hydrated surface shows them. `display_name` is always joined
- * (never a bare UUID); the rest arrive from `?expand=owner,reporter` — except
+ * (never a bare UUID); the rest arrive from `?expand=owner,reviewer` — except
  * `job_title`, which the workflow's member rows also carry, so an Owner can be
  * labelled without paying for expand.
  */
@@ -107,7 +107,7 @@ export interface TaskSummary {
 	status: { id: string; name: string };
 	stage: { id: string; name: string };
 	owner: UserStub | null;
-	reporter: UserStub | null;
+	reviewer: UserStub | null;
 	labels: string[];
 	archived: boolean;
 	updated_at: string;
@@ -151,7 +151,7 @@ export interface TaskDetail extends TaskSummary {
 /**
  * One hydrated row of a task's history (DATATYPE-TIMELINE-EVENT). The values are
  * deliberately `unknown`: their shape depends on `event_type` (for
- * owner_changed/reporter_changed they are a BARE user uuid or null, not an
+ * owner_changed/reviewer_changed they are a BARE user uuid or null, not an
  * object), and the server adds event types without a client change.
  */
 export interface TimelineEvent {
@@ -195,14 +195,12 @@ export interface CreateTaskInput {
 	stage?: string;
 	status?: string;
 	owner?: string;
-	reporter?: string;
+	reviewer?: string;
 	labels?: string[];
 	priority?: TaskPriority;
 	due_date?: string;
 	estimate_hours?: number;
 	guest_visible?: boolean;
-	guest_title?: string;
-	guest_description?: string;
 	custom_fields?: CustomFieldValue[];
 }
 
@@ -222,11 +220,9 @@ export interface UpdateTaskInput {
 	start_date?: string | null;
 	estimate?: number;
 	guest_visible?: boolean;
-	guest_title?: string;
-	guest_description?: string;
-	// owner/reporter ride the SAME PATCH as the content fields; null clears.
+	// owner/reviewer ride the SAME PATCH as the content fields; null clears.
 	owner?: string | null;
-	reporter?: string | null;
+	reviewer?: string | null;
 	// Convenience fields the PATCH does not accept — the op fans them out to the
 	// dedicated labels / field-values endpoints.
 	add_labels?: string[];

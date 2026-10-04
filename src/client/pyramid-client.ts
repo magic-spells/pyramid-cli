@@ -109,7 +109,7 @@ export class PyramidClient {
 	}
 
 	/**
-	 * GET /v1/me/tasks — the tasks the caller OWNS or REPORTS, across projects,
+	 * GET /v1/me/tasks — the tasks the caller OWNS or REVIEWS, across projects,
 	 * newest first, with an opaque keyset cursor. Returns the raw `{ data, cursor }`
 	 * envelope (cursor normalized to `string | null`). `limit` caps the page;
 	 * `cursor` continues a prior page.
@@ -140,7 +140,7 @@ export class PyramidClient {
 	 * GET /v1/projects/{id}/tasks — a project's tasks, newest first, with an opaque
 	 * keyset cursor. Returns the raw `{ data, cursor }` envelope (cursor normalized
 	 * to `string | null`). All filter values are already-resolved UUIDs (`status` is
-	 * a status UUID, plus `stage_id`/`owner_id`/`reporter_id`/`label_id`) or free
+	 * a status UUID, plus `stage_id`/`owner_id`/`reviewer_id`/`label_id`) or free
 	 * text (`q`); `expand` opts relations into the rows. `projectId` must already be
 	 * a UUID. (Real query names per DOC-BACKEND-CONTRACT — no `assignee_id`.)
 	 */
@@ -150,7 +150,7 @@ export class PyramidClient {
 			status?: string;
 			stage_id?: string;
 			owner_id?: string;
-			reporter_id?: string;
+			reviewer_id?: string;
 			label_id?: string;
 			q?: string;
 			limit?: number;
@@ -166,7 +166,7 @@ export class PyramidClient {
 					status: opts?.status,
 					stage_id: opts?.stage_id,
 					owner_id: opts?.owner_id,
-					reporter_id: opts?.reporter_id,
+					reviewer_id: opts?.reviewer_id,
 					label_id: opts?.label_id,
 					q: opts?.q,
 					limit: opts?.limit,
@@ -279,14 +279,14 @@ export class PyramidClient {
 	async searchTasks(opts: {
 		q: string;
 		owner_id?: string;
-		reporter_id?: string;
+		reviewer_id?: string;
 		limit?: number;
 	}): Promise<{ data: unknown[]; cursor: string | null }> {
 		const envelope = await this.request<CursorEnvelope>('GET', '/v1/search/tasks', {
 			query: {
 				q: opts.q,
 				owner_id: opts.owner_id,
-				reporter_id: opts.reporter_id,
+				reviewer_id: opts.reviewer_id,
 				limit: opts.limit,
 			},
 		});
@@ -318,7 +318,7 @@ export class PyramidClient {
 
 	/**
 	 * PATCH /v1/tasks/{id} — sparse update of a task's content (title/description/
-	 * priority/dates/estimate/guest_*) AND its `owner_id`/`reporter_id` (an explicit
+	 * priority/dates/estimate/guest_visible) AND its `owner_id`/`reviewer_id` (an explicit
 	 * null clears one). `body` still carries NO labels and NO field_values — those
 	 * keep their dedicated endpoints. Requires If-Match
 	 * (DOC-CONCURRENCY): GET first to capture the ETag, send it, retry ONCE on 409.

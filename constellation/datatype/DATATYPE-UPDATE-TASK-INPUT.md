@@ -18,9 +18,9 @@ interface UpdateTaskInput {
   due_date?: string | null;
   start_date?: string | null;
   estimate?: number;
-  guest_visible?: boolean; guest_title?: string; guest_description?: string;
+  guest_visible?: boolean;
   owner?: string | null;    // member name/email; explicit null clears
-  reporter?: string | null; // same
+  reviewer?: string | null; // same
   // Convenience fields the backend PATCH does NOT accept — the MCP fans each out (see below):
   add_labels?: string[];
   remove_labels?: string[];
@@ -28,8 +28,8 @@ interface UpdateTaskInput {
 }
 ```
 
-**Wire mapping ([[DOC-BACKEND-CONTRACT]]).** `owner`/`reporter` resolve to `owner_id`/
-`reporter_id` and ride the **same** `PATCH /v1/tasks/{id}` as the content fields — one write,
+**Wire mapping ([[DOC-BACKEND-CONTRACT]]).** `owner`/`reviewer` resolve to `owner_id`/
+`reviewer_id` and ride the **same** `PATCH /v1/tasks/{id}` as the content fields — one write,
 covered by the read-first `If-Match` ([[DOC-CONCURRENCY]]), so an ownership change can no longer
 half-succeed. Passing `null` clears the field; a name that resolves to a non-member → 422
 `validation_failed`.

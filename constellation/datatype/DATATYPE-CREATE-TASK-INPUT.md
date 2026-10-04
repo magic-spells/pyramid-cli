@@ -23,14 +23,14 @@ interface CreateTaskInput {
   estimate_hours?: number;
   labels?: string[];          // label names
   owner?: string;             // member name/email -> owner_id
-  reporter?: string;          // member name/email -> reporter_id
+  reviewer?: string;          // member name/email -> reviewer_id
   custom_fields?: { field: string; value: unknown }[]; // MCP validates value against field_type
-  guest_visible?: boolean; guest_title?: string; guest_description?: string;
+  guest_visible?: boolean;
 }
 ```
 
-**Ownership is flat.** A task has one owner and one reporter; `owner`/`reporter` resolve to
-top-level `owner_id`/`reporter_id` on the create body ([[DOC-BACKEND-CONTRACT]]). There is no
+**Ownership is flat.** A task has one owner and one reviewer; `owner`/`reviewer` resolve to
+top-level `owner_id`/`reviewer_id` on the create body ([[DOC-BACKEND-CONTRACT]]). There is no
 stage to derive and no `assignments[]` — the per-stage `stage_responsibilities` model, and the
 `assignments[]` input that fed it, were both removed when the server dropped per-stage
 ownership. A name that resolves to a non-member of the project → 422 `validation_failed`.

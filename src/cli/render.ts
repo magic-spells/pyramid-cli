@@ -155,7 +155,7 @@ function renderRows(rows: unknown[]): void {
  * {id,display_name}) collapse to their human label; arrays join with commas;
  * other objects fall back to compact JSON.
  *
- * A person (Owner / Reporter) renders as "Ann Smith (Design Lead)" when a
+ * A person (Owner / Reviewer) renders as "Ann Smith (Design Lead)" when a
  * job_title is known — the title is what tells a reader whether the right person
  * holds the task, and a bare name makes them go look it up.
  */

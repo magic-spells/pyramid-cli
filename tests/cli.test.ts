@@ -177,13 +177,13 @@ describe('render — emits JSON when --json or non-TTY (DOC-CLI-OUTPUT)', () => 
 		expect(cap.err).toContain('CUR-2');
 	});
 
-	it('shows Owner and Reporter with their job_title when one is known', () => {
+	it('shows Owner and Reviewer with their job_title when one is known', () => {
 		cap = capture({ isTTY: true });
 		render(
 			{
 				key: 'APO-1',
 				owner: { id: 'u-ann', display_name: 'Ann Smith', job_title: 'Design Lead' },
-				reporter: { id: 'u-bob', display_name: 'Bob Jones' },
+				reviewer: { id: 'u-bob', display_name: 'Bob Jones' },
 			},
 			{ ...BASE_OPTS, json: false }
 		);

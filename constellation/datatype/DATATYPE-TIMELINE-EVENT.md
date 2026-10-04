@@ -27,7 +27,7 @@ payload shape varies per `event_type` and new types appear without a client chan
 interface TimelineEvent {
   id: string;
   task_id: string;
-  event_type: string;        // e.g. "owner_changed", "reporter_changed", "status_changed"
+  event_type: string;        // e.g. "owner_changed", "reviewer_changed", "status_changed"
   actor: UserStub | null;    // actor_id joined to a name; null for system events
   old_value: unknown;        // shape depends on event_type
   new_value: unknown;
@@ -36,7 +36,7 @@ interface TimelineEvent {
 }
 ```
 
-**Do not type the values.** For `owner_changed` / `reporter_changed` the server sends
+**Do not type the values.** For `owner_changed` / `reviewer_changed` the server sends
 `old_value` / `new_value` as a **bare user uuid or null**, not an object — other event types use
 other shapes. The op keeps them `unknown` and resolves names only where it knows the type,
 rather than inventing a discriminated union that the next server release would break.
